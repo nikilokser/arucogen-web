@@ -7,6 +7,13 @@
   <meta name="theme-color" content="#2459d3">
   <title>ArUco Web — генератор карт маркеров</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%232459d3'/%3E%3Cpath fill='white' d='M6 6h20v20H6z'/%3E%3Cpath fill='%232459d3' d='M9 9h14v14H9zm4 0v5h5v4h5v-9z'/%3E%3C/svg%3E">
+  <script>
+    (() => {
+      let theme;
+      try { theme = localStorage.getItem('arucogen-theme'); } catch {}
+      document.documentElement.dataset.theme = theme === 'dark' || theme === 'light' ? theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    })();
+  </script>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -16,6 +23,7 @@
       <span>ArUco<span class="brand-light"> Web</span></span>
     </a>
     <nav aria-label="Ссылки проекта">
+      <button id="theme-toggle" class="secondary-button" type="button" aria-label="Включить тёмную тему">☾ Тёмная</button>
       <span class="local-note"><span class="status-dot"></span>Всё в вашем браузере</span>
       <a href="https://github.com/nikilokser/arucogen-web" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
     </nav>
@@ -45,16 +53,16 @@
         <section class="panel grid-panel" aria-labelledby="grid-heading">
           <div class="panel-heading"><h2 id="grid-heading">Создать сетку маркеров</h2></div>
           <div class="settings-fields">
-            <label>Маркеров по ширине<input id="grid-columns" type="number" min="1" max="1000" step="1" value="3" inputmode="numeric"></label>
-            <label>Маркеров по длине<input id="grid-rows" type="number" min="1" max="1000" step="1" value="3" inputmode="numeric"></label>
+            <label>Маркеров по ширине<input id="grid-columns" type="number" min="1" max="1000" step="1" value="2" inputmode="numeric"></label>
+            <label>Маркеров по длине<input id="grid-rows" type="number" min="1" max="1000" step="1" value="2" inputmode="numeric"></label>
             <label class="full-field">Размер маркера, м<input id="grid-length" type="number" min="0.000001" step="any" value="0.185" inputmode="decimal"></label>
             <label>Начальный ID<input id="grid-id-start" type="number" min="0" step="1" value="1" inputmode="numeric"></label>
             <label>Конечный ID<input id="grid-id-end" type="number" min="0" step="1" value="49" inputmode="numeric"></label>
           </div>
           <fieldset class="spacing-mode"><legend>Расстояния между центрами</legend><label><input name="grid-mode" type="radio" value="span" checked> Между крайними</label><label><input name="grid-mode" type="radio" value="step"> Между соседними</label></fieldset>
           <div id="span-fields" class="settings-fields">
-            <label>Крайние по ширине, м<input id="grid-span-x" type="number" min="0" step="any" value="1.6" inputmode="decimal"></label>
-            <label>Крайние по длине, м<input id="grid-span-y" type="number" min="0" step="any" value="1.6" inputmode="decimal"></label>
+            <label>Крайние по ширине, м<input id="grid-span-x" type="number" min="0" step="any" value="0.8" inputmode="decimal"></label>
+            <label>Крайние по длине, м<input id="grid-span-y" type="number" min="0" step="any" value="0.8" inputmode="decimal"></label>
           </div>
           <div id="step-fields" class="settings-fields" hidden>
             <label>Шаг по ширине, м<input id="grid-step-x" type="number" min="0" step="any" value="0.8" inputmode="decimal"></label>
@@ -62,7 +70,7 @@
           </div>
           <div class="grid-summary" id="grid-summary" aria-live="polite"></div>
           <p id="grid-error" class="error-box" role="alert" hidden></p>
-          <div class="grid-actions"><button id="generate-grid" class="primary-button" type="button">Создать сетку</button><p class="field-hint">Заменит текущие маркеры.<br>После создания их можно редактировать вручную.</p></div>
+          <div class="grid-actions"><p class="field-hint">Сетка обновляется автоматически. Изменение её параметров заменяет текущие маркеры. Ручные правки и добавленные метки сохраняются до следующего изменения параметров сетки.</p></div>
         </section>
 
         <section class="panel marker-panel" aria-labelledby="markers-heading">

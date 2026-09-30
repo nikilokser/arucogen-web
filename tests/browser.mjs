@@ -84,7 +84,6 @@ try {
   await page.getByLabel('Конечный ID', { exact: true }).fill('99');
   await page.getByLabel('Крайние по ширине, м', { exact: true }).fill('0.8');
   await page.getByLabel('Крайние по длине, м', { exact: true }).fill('0.6');
-  await page.getByRole('button', { name: 'Создать сетку', exact: true }).click();
   assert.equal(await page.locator('#marker-rows tr').count(), 6);
   assert.equal(await page.locator('#marker-rows input[data-field="id"]').last().inputValue(), '95');
   assert.equal(await page.locator('#marker-rows input[data-field="x"]').first().inputValue(), '-0.4');
@@ -97,11 +96,11 @@ try {
   await page.getByRole('button', { name: 'Добавить маркер', exact: true }).click();
   assert.equal(await page.locator('#marker-rows tr').count(), 7);
   await page.getByLabel('Начальный ID', { exact: true }).fill('99');
-  await page.getByRole('button', { name: 'Создать сетку', exact: true }).click();
   assert.equal(await page.locator('#marker-rows tr').count(), 7);
   assert.match(await page.locator('#grid-error').innerText(), /Не хватает ID/);
   await page.getByLabel('Начальный ID', { exact: true }).fill('90');
-  await page.getByRole('button', { name: 'Создать сетку', exact: true }).click();
+  assert.equal(await page.locator('#marker-rows tr').count(), 6);
+  assert.equal(await page.getByRole('button', { name: 'Создать сетку', exact: true }).count(), 0);
   for (const format of ['SVG', 'PNG', 'TXT']) {
     const promise = page.waitForEvent('download');
     await page.getByRole('button', { name: `Скачать ${format}`, exact: true }).click();
@@ -119,12 +118,35 @@ try {
   await page.waitForFunction(() => document.querySelector('#dictionary-select').value === 'DICT_5X5_100');
   assert.equal(await page.getByRole('button', { name: 'Скачать SVG', exact: true }).isEnabled(), true);
   assert.equal(await page.locator('#grid-error').isHidden(), true);
+  await page.getByRole('tab', { name: 'TXT', exact: true }).click();
+  const draft = await page.locator('#txt-source').inputValue() + '# черновик\n';
+  await page.locator('#txt-source').fill(draft);
+  await page.getByLabel('Шаг по ширине, м', { exact: true }).fill('0.5');
+  assert.match(await page.locator('#grid-error').innerText(), /Сначала примените изменения TXT/);
+  assert.equal(await page.locator('#txt-source').inputValue(), draft);
+  assert.equal(await page.locator('#marker-rows tr').count(), 6);
+  await page.getByRole('button', { name: 'Применить TXT', exact: true }).click();
+  await page.getByLabel('Шаг по ширине, м', { exact: true }).fill('0.4');
+  await page.getByRole('tab', { name: 'Таблица', exact: true }).click();
+  await page.getByRole('button', { name: 'Включить тёмную тему', exact: true }).click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+  assert.equal(await page.locator('#map-preview > svg > rect').first().getAttribute('fill'), 'white');
+  const darkDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Скачать SVG', exact: true }).click();
+  await (await darkDownloadPromise).saveAs('test-results/dark.svg');
+  assert.equal(await readFile('test-results/dark.svg', 'utf8'), gridSvg);
+  await page.screenshot({ path: 'test-results/dark.png', fullPage: true });
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+  await page.getByRole('button', { name: 'Включить светлую тему', exact: true }).click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   await page.screenshot({ path: 'test-results/desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'test-results/mobile.png', fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: example, import, editing, 22 dictionaries, grid generation, center-spacing modes, physical SVG, PNG/TXT, validation, mobile layout.');
+  console.log('Browser checks passed: example, import, editing, 22 dictionaries, live grid, protected TXT drafts, center-spacing modes, persistent dark theme, white exports, physical SVG, PNG/TXT, validation, mobile layout.');
 } finally {
   await browser?.close();
   server?.kill();

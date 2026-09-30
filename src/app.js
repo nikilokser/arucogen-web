@@ -3,6 +3,20 @@ import { generateGrid } from './grid.js';
 import { EXAMPLE } from './example.js';
 
 const $ = selector => document.querySelector(selector);
+const themeButton = $('#theme-toggle');
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const dark = theme === 'dark';
+  themeButton.textContent = dark ? '☀ Светлая' : '☾ Тёмная';
+  themeButton.setAttribute('aria-label', dark ? 'Включить светлую тему' : 'Включить тёмную тему');
+  themeButton.setAttribute('aria-pressed', String(dark));
+}
+setTheme(document.documentElement.dataset.theme);
+themeButton.addEventListener('click', () => {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  setTheme(theme);
+  try { localStorage.setItem('arucogen-theme', theme); } catch {}
+});
 const newMap = () => [
   { id: 1, length: .185, x: -.4, y: .4, z: 0, rot_z: 0, rot_y: 0, rot_x: 0 },
   { id: 2, length: .185, x: .4, y: .4, z: 0, rot_z: 0, rot_y: 0, rot_x: 0 },
@@ -282,6 +296,11 @@ $('#new-map').addEventListener('click', () => {
   controls.scale.value = DEFAULT_SETTINGS.scale;
   dictionarySelect.value = DEFAULT_DICTIONARY;
   refreshDictionary();
+  for (const input of Object.values(gridFields)) input.value = input.defaultValue;
+  gridMode = 'span';
+  $('input[name="grid-mode"][value="span"]').checked = true;
+  $('#span-fields').hidden = false;
+  $('#step-fields').hidden = true;
   zoom = 1;
   replaceMap(newMap(), 'Новая карта: 4 маркера, холст 2000 × 2000 px');
 });
@@ -317,21 +336,28 @@ function currentGrid() {
   const current = readSettings();
   return generateGrid(readGrid(), dictionarySelect.value, { width: current.paperWidth, height: current.paperHeight });
 }
-function refreshGrid() {
+function refreshGrid(apply = false) {
   const options = readGrid();
   gridFields.spanX.disabled = gridFields.stepX.disabled = options.columns === 1;
   gridFields.spanY.disabled = gridFields.stepY.disabled = options.rows === 1;
   try {
     const grid = currentGrid();
+    if (apply) {
+      if (sourceDirty) throw new Error('Сначала примените изменения TXT. Текущая карта сохранена.');
+      markers = grid.markers;
+      renderRows();
+      syncSource();
+      update();
+    }
     $('#grid-error').hidden = true;
     $('#grid-summary').textContent = `${grid.markers.length} меток, ID ${grid.markers[0].id}–${grid.markers.at(-1).id}. Крайние центры: ${formatMeters(grid.spanX)} × ${formatMeters(grid.spanY)} м. Шаг: ${formatMeters(grid.stepX)} × ${formatMeters(grid.stepY)} м. Габариты с учётом размера меток: ${formatMeters(grid.boundsWidth)} × ${formatMeters(grid.boundsHeight)} м.`;
   } catch (error) {
-    $('#grid-summary').textContent = 'Настройки сетки не изменяют текущую карту до нажатия «Создать сетку».';
+    $('#grid-summary').textContent = 'Текущая карта сохранена. Исправьте настройки для автоматического обновления сетки.';
     $('#grid-error').textContent = error.message;
     $('#grid-error').hidden = false;
   }
 }
-Object.values(gridFields).forEach(input => input.addEventListener('input', refreshGrid));
+Object.values(gridFields).forEach(input => input.addEventListener('input', () => refreshGrid(true)));
 for (const radio of document.querySelectorAll('input[name="grid-mode"]')) radio.addEventListener('change', () => {
   const old = readGrid();
   for (const axis of ['X', 'Y']) {
@@ -345,17 +371,6 @@ for (const radio of document.querySelectorAll('input[name="grid-mode"]')) radio.
   $('#span-fields').hidden = gridMode !== 'span';
   $('#step-fields').hidden = gridMode !== 'step';
   refreshGrid();
-});
-$('#generate-grid').addEventListener('click', () => {
-  try {
-    const grid = currentGrid();
-    replaceMap(grid.markers, `Создана сетка: ${grid.markers.length} маркеров. Можно редактировать их вручную.`);
-    refreshGrid();
-  } catch (error) {
-    $('#grid-error').textContent = error.message;
-    $('#grid-error').hidden = false;
-    notify('Карта не изменена. Исправьте настройки сетки.');
-  }
 });
 for (const id of ['show-grid', 'show-labels']) $(`#${id}`).addEventListener('change', update);
 function setZoom(value) {

@@ -15,3 +15,24 @@ footer{max-width:1536px;margin:0 auto;padding:24px clamp(20px,4vw,64px) 32px;bor
 .settings-fields .full-field{grid-column:1/-1}.settings-fields select{width:100%;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:5px;color:#172338;background:#fff;font:inherit;font-size:12px}.settings-fields select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.settings-fields input:disabled{background:#f2f5f8;color:#8a98ab}.settings-fields>.field-hint{margin-top:-6px}.spacing-mode{margin:18px 22px 16px;padding:0;border:0;display:flex;flex-direction:column;gap:9px;font-size:12px;color:#405570}.spacing-mode legend{font-weight:600;margin-bottom:10px}.spacing-mode label{display:flex;align-items:center;gap:7px;cursor:pointer}.spacing-mode input{accent-color:var(--accent)}.grid-summary{margin:16px 22px 13px;padding:12px;background:#f5f8fd;border-radius:6px;font-size:11px;color:#405570;line-height:1.75;font-variant-numeric:tabular-nums}.grid-summary strong{font-weight:600}.grid-actions{display:flex;flex-direction:column;gap:10px;padding:0 22px 20px}.grid-actions button{width:100%}.grid-actions p{text-align:center;font-size:10px}.grid-panel .error-box{margin-top:12px}.map-measurements{padding:4px 24px 16px;font-size:11px;color:#586a82;line-height:1.7;font-variant-numeric:tabular-nums}.map-measurements>span{display:block}.map-measurements strong{font-weight:600;color:#405570}.controls{display:flex;flex-direction:column}
 @media(max-width:600px){.spacing-mode{margin-left:18px;margin-right:18px}.grid-actions{padding-left:18px;padding-right:18px}.grid-summary{margin-left:18px;margin-right:18px}.map-measurements{padding-left:15px;padding-right:15px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+:root{color-scheme:light}#theme-toggle{white-space:nowrap;font-size:12px;padding:8px 10px;min-height:36px}
+:root[data-theme="dark"]{color-scheme:dark;color:#e7edf7;background:#101827;--accent:#91b4ff;--border:#34445b;--muted:#aabbd0;--paper:#192335;--error:#ff9a90}
+[data-theme="dark"] .site-header{background:#192335}
+[data-theme="dark"] .brand-light,[data-theme="dark"] .site-header nav>a,[data-theme="dark"] .format-help summary,[data-theme="dark"] .format-help code,[data-theme="dark"] .preview-options,[data-theme="dark"] .zoom-controls button,[data-theme="dark"] footer strong,[data-theme="dark"] footer a,[data-theme="dark"] .spacing-mode,[data-theme="dark"] .map-measurements strong{color:#d3e0f3}
+[data-theme="dark"] .dictionary-label{background:#233657;color:#b6ccff;border-color:#405982}
+[data-theme="dark"] .mini-marker{border-color:#b6ccff;background-image:linear-gradient(90deg,#b6ccff 50%,transparent 50%)}
+[data-theme="dark"] .count,[data-theme="dark"] .grid-summary,[data-theme="dark"] .coordinate-note{background:#202d42;color:#b6c6dc}
+[data-theme="dark"] .secondary-button,[data-theme="dark"] .settings-fields input,[data-theme="dark"] .settings-fields select,[data-theme="dark"] .marker-table input,[data-theme="dark"] textarea{background:#111c2d;color:#e7edf7;border-color:var(--border)}
+[data-theme="dark"] .primary-button{background:#315dbb;border-color:#5684e1;color:#fff}
+[data-theme="dark"] .marker-table th{background:var(--paper)}
+[data-theme="dark"] .marker-table td,[data-theme="dark"] .coordinate-note,[data-theme="dark"] .format-help,[data-theme="dark"] .export-area,[data-theme="dark"] footer{border-color:var(--border)}
+[data-theme="dark"] .add-button{background:#202f49;border-color:#4c6591}
+[data-theme="dark"] .format-line,[data-theme="dark"] .button-detail,[data-theme="dark"] .map-measurements{color:#aabbd0}
+[data-theme="dark"] .primary-button .button-detail{color:#e1e9ff}
+[data-theme="dark"] .settings-fields input:disabled{background:#263143;color:#9eaec4}
+[data-theme="dark"] .preview-canvas{background-color:#111c2d;background-image:radial-gradient(#34445b .75px,transparent .75px);border-color:var(--border)}
+[data-theme="dark"] .preview-invalid{background:#111c2de6}
+[data-theme="dark"] .error-box,[data-theme="dark"] .marker-table input[aria-invalid=true],[data-theme="dark"] .remove-marker:hover:not(:disabled){background:#3c242c;border-color:#865058}
+[data-theme="dark"] .warnings{background:#352f1c;border-color:#796938;color:#efcf7b}
+[data-theme="dark"] .notification{background:#d3e0f3;color:#101827}
+@media(max-width:600px){.site-header nav{gap:12px}.site-header{gap:12px}#theme-toggle{padding:7px 8px;font-size:11px}}
