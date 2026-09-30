@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Генератор карт ArUco и AprilTag: 22 словаря, сетка маркеров, поле для печати, импорт TXT, экспорт SVG и PNG. Веб-форк GeBondar/aruco_map_generator.">
-  <meta name="theme-color" content="#2459d3">
+  <meta name="theme-color" content="#1ebcf1">
   <title>ArUco Web — генератор карт маркеров</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%232459d3'/%3E%3Cpath fill='white' d='M6 6h20v20H6z'/%3E%3Cpath fill='%232459d3' d='M9 9h14v14H9zm4 0v5h5v4h5v-9z'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%231ebcf1'/%3E%3Cpath fill='white' d='M6 6h20v20H6z'/%3E%3Cpath fill='%231ebcf1' d='M9 9h14v14H9zm4 0v5h5v4h5v-9z'/%3E%3C/svg%3E">
   <script>
     (() => {
       let theme;
@@ -31,7 +31,7 @@
 
   <main>
     <div class="page-title">
-      <div><h1>Генератор карт ArUco</h1><p>Соберите сетку или разместите маркеры вручную. Размер поля для печати задаётся отдельно.</p></div>
+      <div><div class="page-eyebrow">Генератор карт маркеров</div><h1>КАРТЫ <span>ArUco</span></h1><p>Соберите сетку или разместите маркеры вручную. Размер поля для печати задаётся отдельно.</p></div>
       <span class="dictionary-label"><span class="mini-marker" aria-hidden="true"></span><span id="dictionary-badge">DICT_4X4_50</span></span>
     </div>
 
@@ -108,7 +108,7 @@
       </div>
 
       <section class="panel preview-panel" aria-labelledby="preview-heading">
-        <div class="preview-heading"><div><h2 id="preview-heading">Предпросмотр</h2><span id="canvas-dimensions">2000 × 2000 px</span></div><div class="preview-options"><label><input id="show-grid" type="checkbox" checked> Сетка</label><label><input id="show-labels" type="checkbox" checked> ID</label></div></div>
+        <div class="preview-heading"><div><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><h2 id="preview-heading">Предпросмотр</h2><span id="canvas-dimensions">2000 × 2000 px</span></div><div class="preview-options"><label><input id="show-grid" type="checkbox" checked> Сетка</label><label><input id="show-labels" type="checkbox" checked> ID</label></div></div>
         <div class="preview-canvas" id="preview-canvas">
           <div class="canvas-space" id="canvas-space"><div class="map-sheet" id="map-sheet"><div id="map-preview" aria-label="Карта маркеров ArUco"></div></div></div>
           <div id="preview-invalid" class="preview-invalid" hidden>Исправьте данные, чтобы обновить карту</div>

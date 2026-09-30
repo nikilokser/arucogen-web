@@ -5,7 +5,12 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = path.join(root, 'dist');
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
-const [template, css] = await Promise.all(['index.html', 'styles.css'].map(name => readFile(path.join(root, name), 'utf8')));
+const [template, stylesheet] = await Promise.all(['index.html', 'styles.css'].map(name => readFile(path.join(root, name), 'utf8')));
+let css = stylesheet;
+for (const match of stylesheet.matchAll(/url\('\.\/public\/(fonts\/[^']+)'\)/g)) {
+  const font = await readFile(path.join(root, 'public', match[1]));
+  css = css.replace(match[0], `url('data:font/ttf;base64,${font.toString('base64')}')`);
+}
 const modules = await Promise.all(['dictionary.js', 'core.js', 'grid.js', 'example.js', 'app.js'].map(name => readFile(path.join(root, 'src', name), 'utf8')));
 // The fixed module list has only named exports and one-line local imports.
 // Inline it so the distribution also works offline when opened as file://.

@@ -26,7 +26,9 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(base);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('heading', { name: 'Генератор карт ArUco', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'КАРТЫ ArUco', exact: true }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.evaluate(() => document.fonts.check('600 24px Unbounded') && document.fonts.check('400 13px Inter')), true);
   assert.equal(await page.locator('#marker-rows tr').count(), 4);
   assert.equal(await page.locator('#map-preview [data-marker-id]').count(), 4);
   assert.match(await page.locator('footer').innerText(), /форк/);
