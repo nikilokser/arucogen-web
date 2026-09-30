@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Генератор карт ArUco DICT_4X4_50: импорт TXT, редактирование координат, экспорт SVG и PNG. Веб-форк GeBondar/aruco_map_generator.">
+  <meta name="theme-color" content="#2459d3">
+  <title>ArUco Web — генератор карт маркеров</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%232459d3'/%3E%3Cpath fill='white' d='M6 6h20v20H6z'/%3E%3Cpath fill='%232459d3' d='M9 9h14v14H9zm4 0v5h5v4h5v-9z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#" aria-label="ArUco Web, главная">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="5" fill="currentColor"/><path fill="white" d="M6 6h20v20H6z"/><path fill="currentColor" d="M9 9h14v14H9zm4 0v5h5v4h5v-9z"/></svg>
+      <span>ArUco<span class="brand-light"> Web</span></span>
+    </a>
+    <nav aria-label="Ссылки проекта">
+      <span class="local-note"><span class="status-dot"></span>Всё в вашем браузере</span>
+      <a href="https://github.com/nikilokser/arucogen-web" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-title">
+      <div><h1>Генератор карт ArUco</h1><p>Разместите маркеры на карте и скачайте файл для печати или робототехники.</p></div>
+      <span class="dictionary-label"><span class="mini-marker" aria-hidden="true"></span>DICT_4X4_50</span>
+    </div>
+
+    <div class="workbench">
+      <div class="controls">
+        <section class="panel marker-panel" aria-labelledby="markers-heading">
+          <div class="panel-heading"><h2 id="markers-heading">Маркеры <span id="marker-count" class="count">4</span></h2><button type="button" id="new-map" class="text-button">Новая карта</button></div>
+          <div class="import-actions">
+            <button id="import-file" class="secondary-button" type="button"><span aria-hidden="true">↑</span> Загрузить TXT</button>
+            <button id="load-example" class="text-button" type="button">Пример из исходника</button>
+            <input id="file-input" class="visually-hidden" type="file" accept=".txt,text/plain" aria-label="Загрузить файл карты">
+          </div>
+          <div class="tab-bar" role="tablist" aria-label="Способ редактирования">
+            <button role="tab" id="table-tab" type="button" aria-controls="table-panel" aria-selected="true" tabindex="0">Таблица</button>
+            <button role="tab" id="txt-tab" type="button" aria-controls="txt-panel" aria-selected="false" tabindex="-1">TXT</button>
+          </div>
+          <div id="table-panel" role="tabpanel" aria-labelledby="table-tab">
+            <p class="field-hint">Размер и координаты — в метрах. ID от 0 до 49.</p>
+            <div class="table-scroll">
+              <table class="marker-table"><caption class="visually-hidden">Параметры маркеров</caption>
+                <thead><tr><th scope="col">ID</th><th scope="col">Размер, м</th><th scope="col">X, м</th><th scope="col">Y, м</th><th scope="col"><span class="visually-hidden">Удалить</span></th></tr></thead>
+                <tbody id="marker-rows"></tbody>
+              </table>
+            </div>
+            <button id="add-marker" class="add-button" type="button"><span aria-hidden="true">＋</span> Добавить маркер</button>
+          </div>
+          <div id="txt-panel" role="tabpanel" aria-labelledby="txt-tab" hidden>
+            <label for="txt-source" class="field-hint">Восемь столбцов, разделённых пробелами:</label>
+            <code class="format-line">id length x y z rot_z rot_y rot_x</code>
+            <textarea id="txt-source" aria-label="Карта в формате TXT" spellcheck="false" wrap="off"></textarea>
+            <p id="txt-error" class="error-message" role="alert" hidden></p>
+            <div class="txt-actions"><span id="txt-state">Все изменения применены</span><button id="apply-txt" class="secondary-button" type="button">Применить TXT</button></div>
+          </div>
+          <div id="validation-error" class="error-box" role="alert" hidden></div>
+          <p class="coordinate-note"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 25V5m0 20h20M5 8l3-3 3 3m14 14 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Начало координат — центр холста.<br>Ось X направлена вправо, Y — вверх.</span></p>
+        </section>
+
+        <section class="panel settings-panel" aria-labelledby="settings-heading">
+          <div class="panel-heading"><h2 id="settings-heading">Холст и масштаб</h2></div>
+          <div class="settings-fields">
+            <label>Ширина, px<input id="canvas-width" type="number" min="1" max="8192" step="1" value="2000" inputmode="numeric"></label>
+            <label>Высота, px<input id="canvas-height" type="number" min="1" max="8192" step="1" value="2000" inputmode="numeric"></label>
+            <label class="scale-field">Масштаб, px/м<input id="canvas-scale" type="number" min="0.001" max="1000000" step="any" value="1000" inputmode="decimal"></label>
+          </div>
+          <p id="physical-size" class="field-hint">Область карты: 2 × 2 м</p>
+          <details class="format-help"><summary>Формат и совместимость</summary><p>Используется словарь OpenCV <strong>DICT_4X4_50</strong> с одной чёрной рамкой. Размер — полная сторона маркера, без белого поля.</p><p>Все 8 столбцов сохраняются в TXT. Как в исходнике, <code>z</code>, <code>rot_z</code>, <code>rot_y</code> и <code>rot_x</code> не меняют 2D-карту. Для поворотов требуется отдельная реализация.</p><p>SVG и PNG содержат только карту на белом фоне. Сетка, оси и подписи не экспортируются. Размер SVG задан в пикселях: для печати в физическом масштабе настройте размер страницы в программе печати.</p></details>
+        </section>
+      </div>
+
+      <section class="panel preview-panel" aria-labelledby="preview-heading">
+        <div class="preview-heading"><div><h2 id="preview-heading">Предпросмотр</h2><span id="canvas-dimensions">2000 × 2000 px</span></div><div class="preview-options"><label><input id="show-grid" type="checkbox" checked> Сетка</label><label><input id="show-labels" type="checkbox" checked> ID</label></div></div>
+        <div class="preview-canvas" id="preview-canvas">
+          <div class="canvas-space" id="canvas-space"><div class="map-sheet" id="map-sheet"><div id="map-preview" aria-label="Карта маркеров ArUco"></div></div></div>
+          <div id="preview-invalid" class="preview-invalid" hidden>Исправьте данные, чтобы обновить карту</div>
+        </div>
+        <div class="preview-bottom"><span class="preview-legend"><span class="axis-dot" aria-hidden="true"></span>Центр карты: (0, 0)</span><div class="zoom-controls"><button type="button" id="zoom-out" aria-label="Уменьшить масштаб просмотра">−</button><output id="zoom-level" aria-label="Масштаб просмотра">100%</output><button type="button" id="zoom-in" aria-label="Увеличить масштаб просмотра">+</button><button type="button" id="zoom-fit" class="fit-button">Вписать</button></div></div>
+        <div id="warnings" class="warnings" aria-live="polite" hidden></div>
+        <div class="export-area"><div class="export-heading"><h2>Скачать карту</h2><p>Чистый файл, без сетки и подписей</p></div><div class="export-buttons"><button id="export-svg" class="primary-button" type="button" aria-label="Скачать SVG">SVG <span class="button-detail">Вектор</span> <span aria-hidden="true">↓</span></button><button id="export-png" class="secondary-button" type="button" aria-label="Скачать PNG">PNG <span class="button-detail">Изображение</span> <span aria-hidden="true">↓</span></button><button id="export-txt" class="secondary-button" type="button" aria-label="Скачать TXT">TXT <span class="button-detail">Координаты</span> <span aria-hidden="true">↓</span></button></div></div>
+      </section>
+    </div>
+    <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+  </main>
+
+  <footer><div class="origin-mark" aria-hidden="true">⌘</div><p><strong>Веб‑адаптация / производный форк <a href="https://github.com/GeBondar/aruco_map_generator" target="_blank" rel="noopener noreferrer">GeBondar/aruco_map_generator</a>.</strong><br>Оригинальный генератор и алгоритм размещения — GeBondar. Веб-интерфейс — <a href="https://github.com/nikilokser/arucogen-web" target="_blank" rel="noopener noreferrer">arucogen-web</a>.</p><span class="footer-private">Файлы остаются на вашем устройстве</span></footer>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
