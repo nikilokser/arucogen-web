@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { parseMap, serializeMap, validateSettings, generateSvg, markerRects, mapWarnings } from '../src/core.js';
+import { parseMap, serializeMap, validateSettings, generateSvg, markerRects, mapWarnings, getDictionary, getMarkerMatrix, dictionaryFromText } from '../src/core.js';
 
 test('TXT preserves eight values, comments, whitespace and scientific notation', () => {
   assert.deepEqual(parseMap('\uFEFF  # comment\n1 0.185 8e-1 0.152 2 90 -10 3\n'),
@@ -49,4 +49,35 @@ test('out-of-canvas markers, overlaps and ignored rotations are visible warnings
   assert.ok(warnings.some(s => s.includes('холст')));
   assert.ok(warnings.some(s => s.includes('перекры')));
   assert.ok(warnings.some(s => s.includes('3D')));
+});
+
+test('different dictionaries accept their own ID ranges and render correct grid size', () => {
+  const rows = parseMap('99 .18 0 0 0 0 0 0', 'DICT_5X5_100');
+  assert.equal(getDictionary('DICT_5X5_100').count, 100);
+  assert.equal(getMarkerMatrix(99, 'DICT_5X5_100').length, 7);
+  assert.throws(() => parseMap('99 .18 0 0 0 0 0 0'));
+  assert.throws(() => getDictionary('DICT_FAKE'));
+  assert.throws(() => parseMap('30 .18 0 0 0 0 0 0', 'DICT_APRILTAG_16H5'));
+  assert.match(generateSvg(rows, { width: 1000, height: 1000, scale: 1000, dictionary: 'DICT_5X5_100' }), /DICT_5X5_100/);
+});
+test('TXT records dictionary as a comment and legacy files retain selected dictionary', () => {
+  const rows = parseMap('99 .18 0 0 0 10 20 30', 'DICT_5X5_100');
+  const text = serializeMap(rows, 'DICT_5X5_100');
+  assert.equal(dictionaryFromText(text), 'DICT_5X5_100');
+  assert.deepEqual(parseMap(text, dictionaryFromText(text)), rows);
+  assert.equal(dictionaryFromText('# old map\n1 .1 0 0 0 0 0 0', 'DICT_7X7_50'), 'DICT_7X7_50');
+});
+test('physical SVG dimensions preserve paper size while viewBox preserves pixel geometry', () => {
+  const svg = generateSvg(parseMap('0 .03 0 0 0 0 0 0'), { width: 2100, height: 2970, scale: 10000, paperWidth: .21, paperHeight: .297 });
+  assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 2100 2970"/);
+});
+test('physical SVG geometry is exact even when PNG pixels round paper dimensions', () => {
+  const rows = parseMap('0 .1 0 0 0 0 0 0');
+  const lowResolution = generateSvg(rows, { width: 2, height: 3, scale: 10, paperWidth: .21, paperHeight: .297 });
+  assert.match(lowResolution, /viewBox="0 0 2\.1 2\.97"/);
+  const fractional = generateSvg(rows, { width: 210, height: 297, scale: 1000, paperWidth: .2104, paperHeight: .2974 });
+  assert.match(fractional, /viewBox="0 0 210\.4 297\.4"/);
+  const match = fractional.match(/translate\(([^ ]+) ([^)]+)\)/);
+  assert.ok(Math.abs(Number(match[1]) - 55.2) < 1e-10);
+  assert.ok(Math.abs(Number(match[2]) - 98.7) < 1e-10);
 });

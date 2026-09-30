@@ -6,7 +6,7 @@ const dist = path.join(root, 'dist');
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 const [template, css] = await Promise.all(['index.html', 'styles.css'].map(name => readFile(path.join(root, name), 'utf8')));
-const modules = await Promise.all(['dictionary.js', 'core.js', 'example.js', 'app.js'].map(name => readFile(path.join(root, 'src', name), 'utf8')));
+const modules = await Promise.all(['dictionary.js', 'core.js', 'grid.js', 'example.js', 'app.js'].map(name => readFile(path.join(root, 'src', name), 'utf8')));
 // The fixed module list has only named exports and one-line local imports.
 // Inline it so the distribution also works offline when opened as file://.
 const javascript = modules.map(source => source.replace(/^import .+;\r?\n/gm, '').replace(/^export /gm, '')).join('\n');

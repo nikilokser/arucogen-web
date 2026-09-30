@@ -1,4 +1,5 @@
-import { DEFAULT_SETTINGS, FIELDS, MAX_MARKERS, parseMap, serializeMap, validateMap, validateSettings, generateSvg, markerBox, mapWarnings } from './core.js';
+import { DEFAULT_SETTINGS, DEFAULT_DICTIONARY, DICTIONARY_NAMES, FIELDS, MAX_MARKERS, parseMap, serializeMap, validateMap, validateSettings, generateSvg, markerBox, mapWarnings, getDictionary, dictionaryFromText, renderDimensions } from './core.js';
+import { generateGrid } from './grid.js';
 import { EXAMPLE } from './example.js';
 
 const $ = selector => document.querySelector(selector);
@@ -14,9 +15,43 @@ let zoom = 1;
 let sourceDirty = false;
 let pngBusy = false;
 let notificationTimer;
-const controls = { width: $('#canvas-width'), height: $('#canvas-height'), scale: $('#canvas-scale') };
+const controls = { paperWidth: $('#print-width'), paperHeight: $('#print-height'), scale: $('#canvas-scale') };
+const dictionarySelect = $('#dictionary-select');
+const gridFields = { columns: $('#grid-columns'), rows: $('#grid-rows'), length: $('#grid-length'), idStart: $('#grid-id-start'), idEnd: $('#grid-id-end'), spanX: $('#grid-span-x'), spanY: $('#grid-span-y'), stepX: $('#grid-step-x'), stepY: $('#grid-step-y') };
+let gridMode = 'span';
+let previousDictionary = DEFAULT_DICTIONARY;
 const exportButtons = [$('#export-svg'), $('#export-png'), $('#export-txt')];
 const labels = { id: 'ID', length: 'Размер', x: 'X', y: 'Y' };
+const formatMeters = value => Number(value.toPrecision(6)).toLocaleString('ru-RU');
+
+for (const family of ['4X4', '5X5', '6X6', '7X7', 'ARUCO', 'APRILTAG']) {
+  const group = document.createElement('optgroup');
+  group.label = family === 'ARUCO' ? 'ArUco Original и MIP' : family === 'APRILTAG' ? 'AprilTag' : `ArUco ${family.replace('X', ' × ')}`;
+  const names = DICTIONARY_NAMES.filter(name => name.startsWith(`DICT_${family}`));
+  if (family.endsWith('X4') || family.endsWith('X5') || family.endsWith('X6') || family.endsWith('X7')) names.sort((a, b) => getDictionary(a).count - getDictionary(b).count);
+  for (const name of names) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = `${name} — ${getDictionary(name).count} меток`;
+    group.append(option);
+  }
+  dictionarySelect.append(group);
+}
+dictionarySelect.value = DEFAULT_DICTIONARY;
+
+function refreshDictionary() {
+  const name = dictionarySelect.value;
+  const dictionary = getDictionary(name);
+  const maxId = dictionary.count - 1;
+  $('#dictionary-badge').textContent = name;
+  $('#dictionary-info').textContent = `${dictionary.markerSize} × ${dictionary.markerSize} ячеек + рамка. ID: 0–${maxId}.`;
+  $('#marker-range-hint').textContent = `Размер и координаты — в метрах. ID от 0 до ${maxId}.`;
+  for (const input of $('#marker-rows').querySelectorAll('input[data-field="id"]')) input.max = maxId;
+  if (gridFields.idEnd.valueAsNumber === getDictionary(previousDictionary).count - 1 || gridFields.idEnd.valueAsNumber > maxId) gridFields.idEnd.value = maxId;
+  gridFields.idStart.max = maxId;
+  gridFields.idEnd.max = maxId;
+  previousDictionary = name;
+}
 
 function notify(message) {
   clearTimeout(notificationTimer);
@@ -26,7 +61,7 @@ function notify(message) {
 }
 
 function syncSource() {
-  $('#txt-source').value = `# ${FIELDS.join(' ')}\n` + markers.map(m => FIELDS.map(f => m[f]).join('\t')).join('\n') + '\n';
+  $('#txt-source').value = `# dictionary: ${dictionarySelect.value}\n# ${FIELDS.join(' ')}\n` + markers.map(m => FIELDS.map(f => m[f]).join('\t')).join('\n') + '\n';
   sourceDirty = false;
   $('#txt-error').hidden = true;
   $('#txt-state').textContent = 'Все изменения применены';
@@ -44,7 +79,7 @@ function renderRows() {
       input.value = marker[field];
       input.step = field === 'id' ? '1' : 'any';
       input.inputMode = field === 'id' ? 'numeric' : 'decimal';
-      if (field === 'id') { input.min = '0'; input.max = '49'; }
+      if (field === 'id') { input.min = '0'; input.max = getDictionary(dictionarySelect.value).count - 1; }
       if (field === 'length') input.min = '0.000001';
       input.dataset.field = field;
       input.setAttribute('aria-label', `${labels[field]} маркера, строка ${index + 1}`);
@@ -68,11 +103,12 @@ function renderRows() {
 }
 
 function readSettings() {
-  return validateSettings(Object.fromEntries(Object.entries(controls).map(([field, input]) => [field, input.valueAsNumber])));
+  const dimensions = Object.fromEntries(Object.entries(controls).map(([field, input]) => [field, input.valueAsNumber]));
+  return validateSettings({ ...dimensions, width: Math.round(dimensions.paperWidth * dimensions.scale), height: Math.round(dimensions.paperHeight * dimensions.scale), dictionary: dictionarySelect.value });
 }
 
 function validState() {
-  validateMap(markers);
+  validateMap(markers, dictionarySelect.value);
   const currentSettings = readSettings();
   if (sourceDirty) throw new Error('Примените изменения TXT, чтобы обновить карту и скачать файл.');
   return currentSettings;
@@ -80,11 +116,12 @@ function validState() {
 
 function fitSheet() {
   const canvas = $('#preview-canvas');
+  const dimensions = renderDimensions(settings);
   const width = Math.max(1, canvas.clientWidth - 80);
   const height = Math.max(1, canvas.clientHeight - 80);
-  const factor = Math.min(width / settings.width, height / settings.height) * zoom;
-  const sheetWidth = settings.width * factor;
-  const sheetHeight = settings.height * factor;
+  const factor = Math.min(width / dimensions.width, height / dimensions.height) * zoom;
+  const sheetWidth = dimensions.width * factor;
+  const sheetHeight = dimensions.height * factor;
   $('#map-sheet').style.width = `${sheetWidth}px`;
   $('#map-sheet').style.height = `${sheetHeight}px`;
   $('#canvas-space').style.width = `${Math.max(canvas.clientWidth, sheetWidth + 80)}px`;
@@ -97,12 +134,13 @@ function fitSheet() {
 
 function renderPreview() {
   const sheetWidth = fitSheet();
-  const unit = settings.width / sheetWidth;
+  const dimensions = renderDimensions(settings);
+  const unit = dimensions.width / sheetWidth;
   let svg = generateSvg(markers, settings);
   if ($('#show-grid').checked) {
     const pixelStep = Math.max(settings.scale / 10, 16 * unit);
     const strokeWidth = .65 * unit;
-    const grid = `<defs><pattern id="preview-grid" width="${pixelStep}" height="${pixelStep}" patternUnits="userSpaceOnUse" x="${settings.width / 2}" y="${settings.height / 2}"><path d="M ${pixelStep} 0 H 0 V ${pixelStep}" fill="none" stroke="#e4ebf3" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${settings.width}" height="${settings.height}" fill="url(#preview-grid)"/><g stroke="#9cb2d1" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${settings.width / 2}" y1="0" x2="${settings.width / 2}" y2="${settings.height}"/><line x1="0" y1="${settings.height / 2}" x2="${settings.width}" y2="${settings.height / 2}"/></g><circle cx="${settings.width / 2}" cy="${settings.height / 2}" r="${2.5 * unit}" fill="#2459d3"/>`;
+    const grid = `<defs><pattern id="preview-grid" width="${pixelStep}" height="${pixelStep}" patternUnits="userSpaceOnUse" x="${dimensions.width / 2}" y="${dimensions.height / 2}"><path d="M ${pixelStep} 0 H 0 V ${pixelStep}" fill="none" stroke="#e4ebf3" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#9cb2d1" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${dimensions.width / 2}" y1="0" x2="${dimensions.width / 2}" y2="${dimensions.height}"/><line x1="0" y1="${dimensions.height / 2}" x2="${dimensions.width}" y2="${dimensions.height / 2}"/></g><circle cx="${dimensions.width / 2}" cy="${dimensions.height / 2}" r="${2.5 * unit}" fill="#2459d3"/>`;
     svg = svg.replace(/(<g data-marker-id=)/, grid + '$1');
   }
   if ($('#show-labels').checked) {
@@ -117,10 +155,11 @@ function renderPreview() {
 }
 
 function update() {
+  const maxId = getDictionary(dictionarySelect.value).count - 1;
   for (const row of $('#marker-rows').rows) {
     for (const input of row.querySelectorAll('input')) {
       const value = markers[Number(row.dataset.index)][input.dataset.field];
-      const invalid = !Number.isFinite(value) || (input.dataset.field === 'id' && (!Number.isInteger(value) || value < 0 || value > 49)) || (input.dataset.field === 'length' && value <= 0);
+      const invalid = !Number.isFinite(value) || (input.dataset.field === 'id' && (!Number.isInteger(value) || value < 0 || value > maxId)) || (input.dataset.field === 'length' && value <= 0);
       input.setAttribute('aria-invalid', String(invalid));
     }
   }
@@ -130,8 +169,15 @@ function update() {
     $('#preview-invalid').hidden = true;
     exportButtons.forEach(button => { button.disabled = pngBusy; });
     $('#canvas-dimensions').textContent = `${settings.width} × ${settings.height} px`;
-    const format = n => Number(n.toPrecision(5)).toLocaleString('ru-RU');
-    $('#physical-size').textContent = `Область карты: ${format(settings.width / settings.scale)} × ${format(settings.height / settings.scale)} м`;
+    $('#physical-size').textContent = `Поле для печати: ${formatMeters(settings.paperWidth)} × ${formatMeters(settings.paperHeight)} м. PNG: ${settings.width} × ${settings.height} px.`;
+    const spanX = Math.max(...markers.map(m => m.x)) - Math.min(...markers.map(m => m.x));
+    const spanY = Math.max(...markers.map(m => m.y)) - Math.min(...markers.map(m => m.y));
+    const boundsWidth = Math.max(...markers.map(m => m.x + m.length / 2)) - Math.min(...markers.map(m => m.x - m.length / 2));
+    const boundsHeight = Math.max(...markers.map(m => m.y + m.length / 2)) - Math.min(...markers.map(m => m.y - m.length / 2));
+    $('#map-measurements').replaceChildren(...[
+      `Между крайними центрами: ${formatMeters(spanX)} × ${formatMeters(spanY)} м`,
+      `Габариты всех маркеров: ${formatMeters(boundsWidth)} × ${formatMeters(boundsHeight)} м`,
+    ].map(text => { const span = document.createElement('span'); span.textContent = text; return span; }));
     const warnings = mapWarnings(markers, settings);
     $('#warnings').replaceChildren(...warnings.map(message => { const p = document.createElement('p'); p.textContent = message; return p; }));
     $('#warnings').hidden = !warnings.length;
@@ -147,12 +193,16 @@ function update() {
 
 function applyText() {
   try {
-    const next = parseMap($('#txt-source').value);
+    const nextDictionary = dictionaryFromText($('#txt-source').value, dictionarySelect.value);
+    const next = parseMap($('#txt-source').value, nextDictionary);
+    dictionarySelect.value = nextDictionary;
+    refreshDictionary();
     markers = next;
     sourceDirty = false;
     renderRows();
     syncSource();
     update();
+    refreshGrid();
     return true;
   } catch (error) {
     $('#txt-error').textContent = error.message;
@@ -209,8 +259,9 @@ $('#marker-rows').addEventListener('click', event => {
 });
 $('#add-marker').addEventListener('click', () => {
   const used = new Set(markers.map(m => m.id));
-  const id = Array.from({ length: 50 }, (_, i) => i).find(i => !used.has(i));
-  if (id === undefined) { notify('Все 50 ID уже используются. Удалите маркер или добавьте повторный ID через TXT.'); return; }
+  const count = getDictionary(dictionarySelect.value).count;
+  const id = Array.from({ length: count }, (_, i) => i).find(i => !used.has(i));
+  if (id === undefined) { notify(`Все ${count} ID уже используются. Удалите маркер или добавьте повторный ID через TXT.`); return; }
   markers.push({ id, length: .185, x: 0, y: 0, z: 0, rot_z: 0, rot_y: 0, rot_x: 0 });
   renderRows(); syncSource(); update();
   $('#marker-rows').lastElementChild.querySelector('input').focus();
@@ -218,11 +269,19 @@ $('#add-marker').addEventListener('click', () => {
 
 function replaceMap(next, message) {
   markers = next;
-  renderRows(); syncSource(); setTab('table'); update(); notify(message);
+  renderRows(); syncSource(); setTab('table'); update(); refreshGrid(); notify(message);
 }
-$('#load-example').addEventListener('click', () => replaceMap(parseMap(EXAMPLE), 'Загружен пример GeBondar: 13 маркеров'));
+$('#load-example').addEventListener('click', () => {
+  dictionarySelect.value = DEFAULT_DICTIONARY;
+  refreshDictionary();
+  replaceMap(parseMap(EXAMPLE), 'Загружен пример GeBondar: 13 маркеров, DICT_4X4_50');
+});
 $('#new-map').addEventListener('click', () => {
-  Object.entries(DEFAULT_SETTINGS).forEach(([key, value]) => { controls[key].value = value; });
+  controls.paperWidth.value = 2;
+  controls.paperHeight.value = 2;
+  controls.scale.value = DEFAULT_SETTINGS.scale;
+  dictionarySelect.value = DEFAULT_DICTIONARY;
+  refreshDictionary();
   zoom = 1;
   replaceMap(newMap(), 'Новая карта: 4 маркера, холст 2000 × 2000 px');
 });
@@ -233,12 +292,71 @@ $('#file-input').addEventListener('change', async event => {
   try {
     if (file.size > 1_000_000) throw new Error('Файл должен быть меньше 1 МБ.');
     const text = await file.text();
-    replaceMap(parseMap(text), `Загружен файл ${file.name}`);
+    const nextDictionary = dictionaryFromText(text, dictionarySelect.value);
+    const next = parseMap(text, nextDictionary);
+    dictionarySelect.value = nextDictionary;
+    refreshDictionary();
+    replaceMap(next, `Загружен файл ${file.name}`);
   } catch (error) { notify(`Карта не изменена. ${error.message}`); }
   event.target.value = '';
 });
 
-Object.values(controls).forEach(input => input.addEventListener('input', update));
+Object.values(controls).forEach(input => input.addEventListener('input', () => { update(); refreshGrid(); }));
+dictionarySelect.addEventListener('change', () => {
+  refreshDictionary();
+  // Changing the dictionary preserves the map and any unapplied TXT draft.
+  if (!sourceDirty) syncSource();
+  update();
+  refreshGrid();
+});
+
+function readGrid() {
+  return { ...Object.fromEntries(Object.entries(gridFields).map(([key, input]) => [key, input.valueAsNumber])), mode: gridMode };
+}
+function currentGrid() {
+  const current = readSettings();
+  return generateGrid(readGrid(), dictionarySelect.value, { width: current.paperWidth, height: current.paperHeight });
+}
+function refreshGrid() {
+  const options = readGrid();
+  gridFields.spanX.disabled = gridFields.stepX.disabled = options.columns === 1;
+  gridFields.spanY.disabled = gridFields.stepY.disabled = options.rows === 1;
+  try {
+    const grid = currentGrid();
+    $('#grid-error').hidden = true;
+    $('#grid-summary').textContent = `${grid.markers.length} меток, ID ${grid.markers[0].id}–${grid.markers.at(-1).id}. Крайние центры: ${formatMeters(grid.spanX)} × ${formatMeters(grid.spanY)} м. Шаг: ${formatMeters(grid.stepX)} × ${formatMeters(grid.stepY)} м. Габариты с учётом размера меток: ${formatMeters(grid.boundsWidth)} × ${formatMeters(grid.boundsHeight)} м.`;
+  } catch (error) {
+    $('#grid-summary').textContent = 'Настройки сетки не изменяют текущую карту до нажатия «Создать сетку».';
+    $('#grid-error').textContent = error.message;
+    $('#grid-error').hidden = false;
+  }
+}
+Object.values(gridFields).forEach(input => input.addEventListener('input', refreshGrid));
+for (const radio of document.querySelectorAll('input[name="grid-mode"]')) radio.addEventListener('change', () => {
+  const old = readGrid();
+  for (const axis of ['X', 'Y']) {
+    const count = old[axis === 'X' ? 'columns' : 'rows'];
+    const span = count === 1 ? 0 : gridMode === 'span' ? old[`span${axis}`] : old[`step${axis}`] * (count - 1);
+    const step = count === 1 ? 0 : span / (count - 1);
+    gridFields[`span${axis}`].value = Number.isFinite(span) ? Number(span.toPrecision(12)) : '';
+    gridFields[`step${axis}`].value = Number.isFinite(step) ? Number(step.toPrecision(12)) : '';
+  }
+  gridMode = radio.value;
+  $('#span-fields').hidden = gridMode !== 'span';
+  $('#step-fields').hidden = gridMode !== 'step';
+  refreshGrid();
+});
+$('#generate-grid').addEventListener('click', () => {
+  try {
+    const grid = currentGrid();
+    replaceMap(grid.markers, `Создана сетка: ${grid.markers.length} маркеров. Можно редактировать их вручную.`);
+    refreshGrid();
+  } catch (error) {
+    $('#grid-error').textContent = error.message;
+    $('#grid-error').hidden = false;
+    notify('Карта не изменена. Исправьте настройки сетки.');
+  }
+});
 for (const id of ['show-grid', 'show-labels']) $(`#${id}`).addEventListener('change', update);
 function setZoom(value) {
   zoom = Math.min(3, Math.max(.5, value));
@@ -273,7 +391,7 @@ $('#export-svg').addEventListener('click', () => {
 $('#export-txt').addEventListener('click', () => {
   try {
     validState();
-    download(new Blob([serializeMap(markers)], { type: 'text/plain;charset=utf-8' }), 'aruco-map.txt');
+    download(new Blob([serializeMap(markers, dictionarySelect.value)], { type: 'text/plain;charset=utf-8' }), 'aruco-map.txt');
     notify('TXT скачан — все восемь столбцов сохранены');
   } catch (error) { notify(error.message); }
 });
@@ -293,7 +411,7 @@ $('#export-png').addEventListener('click', async () => {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Браузер не поддерживает экспорт PNG. Скачайте SVG.');
     context.imageSmoothingEnabled = false;
-    context.drawImage(image, 0, 0);
+    context.drawImage(image, 0, 0, current.width, current.height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('Недостаточно памяти для PNG. Уменьшите холст или скачайте SVG.');
     download(blob, 'aruco-map.png');
@@ -308,5 +426,7 @@ $('#export-png').addEventListener('click', async () => {
 });
 
 renderRows();
+refreshDictionary();
 syncSource();
 update();
+refreshGrid();

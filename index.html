@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Генератор карт ArUco DICT_4X4_50: импорт TXT, редактирование координат, экспорт SVG и PNG. Веб-форк GeBondar/aruco_map_generator.">
+  <meta name="description" content="Генератор карт ArUco и AprilTag: 22 словаря, сетка маркеров, поле для печати, импорт TXT, экспорт SVG и PNG. Веб-форк GeBondar/aruco_map_generator.">
   <meta name="theme-color" content="#2459d3">
   <title>ArUco Web — генератор карт маркеров</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%232459d3'/%3E%3Cpath fill='white' d='M6 6h20v20H6z'/%3E%3Cpath fill='%232459d3' d='M9 9h14v14H9zm4 0v5h5v4h5v-9z'/%3E%3C/svg%3E">
@@ -23,12 +23,48 @@
 
   <main>
     <div class="page-title">
-      <div><h1>Генератор карт ArUco</h1><p>Разместите маркеры на карте и скачайте файл для печати или робототехники.</p></div>
-      <span class="dictionary-label"><span class="mini-marker" aria-hidden="true"></span>DICT_4X4_50</span>
+      <div><h1>Генератор карт ArUco</h1><p>Соберите сетку или разместите маркеры вручную. Размер поля для печати задаётся отдельно.</p></div>
+      <span class="dictionary-label"><span class="mini-marker" aria-hidden="true"></span><span id="dictionary-badge">DICT_4X4_50</span></span>
     </div>
 
     <div class="workbench">
       <div class="controls">
+        <section class="panel settings-panel" aria-labelledby="settings-heading">
+          <div class="panel-heading"><h2 id="settings-heading">Словарь и поле для печати</h2></div>
+          <div class="settings-fields">
+            <label class="full-field">Словарь меток<select id="dictionary-select"></select></label>
+            <p id="dictionary-info" class="field-hint full-field"></p>
+            <label>Ширина поля, м<input id="print-width" type="number" min="0.001" step="any" value="2" inputmode="decimal"></label>
+            <label>Длина поля, м<input id="print-height" type="number" min="0.001" step="any" value="2" inputmode="decimal"></label>
+            <label class="full-field">Разрешение PNG, px/м<input id="canvas-scale" type="number" min="0.001" max="1000000" step="any" value="1000" inputmode="decimal"></label>
+          </div>
+          <p id="physical-size" class="field-hint">Поле для печати: 2 × 2 м</p>
+          <details class="format-help"><summary>Печать и совместимость</summary><p>SVG сохраняет размер поля в миллиметрах. Для печати в масштабе выберите «100% / фактический размер» и отключите подгонку. PNG сохраняется в пикселях по заданному разрешению.</p><p>Словарь определяет рисунки и диапазон ID. ArUco 4×4–7×7, Original, MIP и AprilTag генерируются по словарям OpenCV. Размер маркера включает чёрную рамку, без белого поля.</p><p>Все 8 столбцов сохраняются в TXT. Как в исходнике, <code>z</code> и углы не меняют 2D-карту. Сетка, оси и подписи ID не экспортируются.</p></details>
+        </section>
+
+        <section class="panel grid-panel" aria-labelledby="grid-heading">
+          <div class="panel-heading"><h2 id="grid-heading">Создать сетку маркеров</h2></div>
+          <div class="settings-fields">
+            <label>Маркеров по ширине<input id="grid-columns" type="number" min="1" max="1000" step="1" value="3" inputmode="numeric"></label>
+            <label>Маркеров по длине<input id="grid-rows" type="number" min="1" max="1000" step="1" value="3" inputmode="numeric"></label>
+            <label class="full-field">Размер маркера, м<input id="grid-length" type="number" min="0.000001" step="any" value="0.185" inputmode="decimal"></label>
+            <label>Начальный ID<input id="grid-id-start" type="number" min="0" step="1" value="1" inputmode="numeric"></label>
+            <label>Конечный ID<input id="grid-id-end" type="number" min="0" step="1" value="49" inputmode="numeric"></label>
+          </div>
+          <fieldset class="spacing-mode"><legend>Расстояния между центрами</legend><label><input name="grid-mode" type="radio" value="span" checked> Между крайними</label><label><input name="grid-mode" type="radio" value="step"> Между соседними</label></fieldset>
+          <div id="span-fields" class="settings-fields">
+            <label>Крайние по ширине, м<input id="grid-span-x" type="number" min="0" step="any" value="1.6" inputmode="decimal"></label>
+            <label>Крайние по длине, м<input id="grid-span-y" type="number" min="0" step="any" value="1.6" inputmode="decimal"></label>
+          </div>
+          <div id="step-fields" class="settings-fields" hidden>
+            <label>Шаг по ширине, м<input id="grid-step-x" type="number" min="0" step="any" value="0.8" inputmode="decimal"></label>
+            <label>Шаг по длине, м<input id="grid-step-y" type="number" min="0" step="any" value="0.8" inputmode="decimal"></label>
+          </div>
+          <div class="grid-summary" id="grid-summary" aria-live="polite"></div>
+          <p id="grid-error" class="error-box" role="alert" hidden></p>
+          <div class="grid-actions"><button id="generate-grid" class="primary-button" type="button">Создать сетку</button><p class="field-hint">Заменит текущие маркеры.<br>После создания их можно редактировать вручную.</p></div>
+        </section>
+
         <section class="panel marker-panel" aria-labelledby="markers-heading">
           <div class="panel-heading"><h2 id="markers-heading">Маркеры <span id="marker-count" class="count">4</span></h2><button type="button" id="new-map" class="text-button">Новая карта</button></div>
           <div class="import-actions">
@@ -41,7 +77,7 @@
             <button role="tab" id="txt-tab" type="button" aria-controls="txt-panel" aria-selected="false" tabindex="-1">TXT</button>
           </div>
           <div id="table-panel" role="tabpanel" aria-labelledby="table-tab">
-            <p class="field-hint">Размер и координаты — в метрах. ID от 0 до 49.</p>
+            <p id="marker-range-hint" class="field-hint">Размер и координаты — в метрах. ID от 0 до 49.</p>
             <div class="table-scroll">
               <table class="marker-table"><caption class="visually-hidden">Параметры маркеров</caption>
                 <thead><tr><th scope="col">ID</th><th scope="col">Размер, м</th><th scope="col">X, м</th><th scope="col">Y, м</th><th scope="col"><span class="visually-hidden">Удалить</span></th></tr></thead>
@@ -61,16 +97,6 @@
           <p class="coordinate-note"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 25V5m0 20h20M5 8l3-3 3 3m14 14 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Начало координат — центр холста.<br>Ось X направлена вправо, Y — вверх.</span></p>
         </section>
 
-        <section class="panel settings-panel" aria-labelledby="settings-heading">
-          <div class="panel-heading"><h2 id="settings-heading">Холст и масштаб</h2></div>
-          <div class="settings-fields">
-            <label>Ширина, px<input id="canvas-width" type="number" min="1" max="8192" step="1" value="2000" inputmode="numeric"></label>
-            <label>Высота, px<input id="canvas-height" type="number" min="1" max="8192" step="1" value="2000" inputmode="numeric"></label>
-            <label class="scale-field">Масштаб, px/м<input id="canvas-scale" type="number" min="0.001" max="1000000" step="any" value="1000" inputmode="decimal"></label>
-          </div>
-          <p id="physical-size" class="field-hint">Область карты: 2 × 2 м</p>
-          <details class="format-help"><summary>Формат и совместимость</summary><p>Используется словарь OpenCV <strong>DICT_4X4_50</strong> с одной чёрной рамкой. Размер — полная сторона маркера, без белого поля.</p><p>Все 8 столбцов сохраняются в TXT. Как в исходнике, <code>z</code>, <code>rot_z</code>, <code>rot_y</code> и <code>rot_x</code> не меняют 2D-карту. Для поворотов требуется отдельная реализация.</p><p>SVG и PNG содержат только карту на белом фоне. Сетка, оси и подписи не экспортируются. Размер SVG задан в пикселях: для печати в физическом масштабе настройте размер страницы в программе печати.</p></details>
-        </section>
       </div>
 
       <section class="panel preview-panel" aria-labelledby="preview-heading">
@@ -80,6 +106,7 @@
           <div id="preview-invalid" class="preview-invalid" hidden>Исправьте данные, чтобы обновить карту</div>
         </div>
         <div class="preview-bottom"><span class="preview-legend"><span class="axis-dot" aria-hidden="true"></span>Центр карты: (0, 0)</span><div class="zoom-controls"><button type="button" id="zoom-out" aria-label="Уменьшить масштаб просмотра">−</button><output id="zoom-level" aria-label="Масштаб просмотра">100%</output><button type="button" id="zoom-in" aria-label="Увеличить масштаб просмотра">+</button><button type="button" id="zoom-fit" class="fit-button">Вписать</button></div></div>
+        <div id="map-measurements" class="map-measurements"></div>
         <div id="warnings" class="warnings" aria-live="polite" hidden></div>
         <div class="export-area"><div class="export-heading"><h2>Скачать карту</h2><p>Чистый файл, без сетки и подписей</p></div><div class="export-buttons"><button id="export-svg" class="primary-button" type="button" aria-label="Скачать SVG">SVG <span class="button-detail">Вектор</span> <span aria-hidden="true">↓</span></button><button id="export-png" class="secondary-button" type="button" aria-label="Скачать PNG">PNG <span class="button-detail">Изображение</span> <span aria-hidden="true">↓</span></button><button id="export-txt" class="secondary-button" type="button" aria-label="Скачать TXT">TXT <span class="button-detail">Координаты</span> <span aria-hidden="true">↓</span></button></div></div>
       </section>
