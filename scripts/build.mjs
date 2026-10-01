@@ -11,7 +11,7 @@ for (const match of stylesheet.matchAll(/url\('\.\/public\/(fonts\/[^']+)'\)/g))
   const font = await readFile(path.join(root, 'public', match[1]));
   css = css.replace(match[0], `url('data:font/ttf;base64,${font.toString('base64')}')`);
 }
-const modules = await Promise.all(['dictionary.js', 'core.js', 'grid.js', 'example.js', 'app.js'].map(name => readFile(path.join(root, 'src', name), 'utf8')));
+const modules = await Promise.all(['dictionary.js', 'core.js', 'grid.js', 'interaction.js', 'example.js', 'app.js'].map(name => readFile(path.join(root, 'src', name), 'utf8')));
 // The fixed module list has only named exports and one-line local imports.
 // Inline it so the distribution also works offline when opened as file://.
 const javascript = modules.map(source => source.replace(/^import .+;\r?\n/gm, '').replace(/^export /gm, '')).join('\n');

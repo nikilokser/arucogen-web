@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, DEFAULT_DICTIONARY, DICTIONARY_NAMES, FIELDS, MAX_MARKERS, parseMap, serializeMap, validateMap, validateSettings, generateSvg, markerBox, mapWarnings, getDictionary, dictionaryFromText, renderDimensions } from './core.js';
 import { generateGrid } from './grid.js';
+import { exportFilename, moveOnGrid } from './interaction.js';
 import { EXAMPLE } from './example.js';
 
 const $ = selector => document.querySelector(selector);
@@ -29,6 +30,11 @@ let zoom = 1;
 let sourceDirty = false;
 let pngBusy = false;
 let notificationTimer;
+let placementGrid = { stepX: .1, stepY: .1, snap: true };
+let drag = null;
+let dragFrame = 0;
+const preview = $('#map-preview');
+const mapName = $('#map-name');
 const controls = { paperWidth: $('#print-width'), paperHeight: $('#print-height'), scale: $('#canvas-scale') };
 const dictionarySelect = $('#dictionary-select');
 const gridFields = { columns: $('#grid-columns'), rows: $('#grid-rows'), length: $('#grid-length'), idStart: $('#grid-id-start'), idEnd: $('#grid-id-end'), spanX: $('#grid-span-x'), spanY: $('#grid-span-y'), stepX: $('#grid-step-x'), stepY: $('#grid-step-y') };
@@ -152,9 +158,11 @@ function renderPreview() {
   const unit = dimensions.width / sheetWidth;
   let svg = generateSvg(markers, settings);
   if ($('#show-grid').checked) {
-    const pixelStep = Math.max(settings.scale / 10, 16 * unit);
+    const visibleStep = step => { const pixels = step * settings.scale; return pixels * 10 ** Math.max(0, Math.ceil(Math.log10(16 * unit / pixels))); };
+    const pixelStepX = visibleStep(placementGrid.stepX);
+    const pixelStepY = visibleStep(placementGrid.stepY);
     const strokeWidth = .65 * unit;
-    const grid = `<defs><pattern id="preview-grid" width="${pixelStep}" height="${pixelStep}" patternUnits="userSpaceOnUse" x="${dimensions.width / 2}" y="${dimensions.height / 2}"><path d="M ${pixelStep} 0 H 0 V ${pixelStep}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${dimensions.width / 2}" y1="0" x2="${dimensions.width / 2}" y2="${dimensions.height}"/><line x1="0" y1="${dimensions.height / 2}" x2="${dimensions.width}" y2="${dimensions.height / 2}"/></g><circle cx="${dimensions.width / 2}" cy="${dimensions.height / 2}" r="${2.5 * unit}" fill="#1ebcf1"/>`;
+    const grid = `<defs><pattern id="preview-grid" width="${pixelStepX}" height="${pixelStepY}" patternUnits="userSpaceOnUse" x="${dimensions.width / 2}" y="${dimensions.height / 2}"><path d="M ${pixelStepX} 0 H 0 V ${pixelStepY}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${dimensions.width / 2}" y1="0" x2="${dimensions.width / 2}" y2="${dimensions.height}"/><line x1="0" y1="${dimensions.height / 2}" x2="${dimensions.width}" y2="${dimensions.height / 2}"/></g><circle cx="${dimensions.width / 2}" cy="${dimensions.height / 2}" r="${2.5 * unit}" fill="#1ebcf1"/>`;
     svg = svg.replace(/(<g data-marker-id=)/, grid + '$1');
   }
   if ($('#show-labels').checked) {
@@ -165,7 +173,14 @@ function renderPreview() {
     svg = svg.replace('</svg>', markerLabels + '</svg>');
   }
   // Content is generated exclusively from finite validated numbers and fixed strings.
-  $('#map-preview').innerHTML = svg;
+  preview.innerHTML = svg;
+  preview.querySelectorAll('[data-marker-id]').forEach((group, index) => {
+    group.dataset.markerIndex = index;
+    group.setAttribute('tabindex', '0');
+    group.setAttribute('role', 'button');
+    group.setAttribute('aria-label', `Маркер ${markers[index].id}, строка ${index + 1}. Перемещение стрелками`);
+    if (drag?.index === index) group.classList.add('dragged-marker');
+  });
 }
 
 function update() {
@@ -291,6 +306,8 @@ $('#load-example').addEventListener('click', () => {
   replaceMap(parseMap(EXAMPLE), 'Загружен пример GeBondar: 13 маркеров, DICT_4X4_50');
 });
 $('#new-map').addEventListener('click', () => {
+  mapName.value = mapName.defaultValue;
+  refreshFilename();
   controls.paperWidth.value = 2;
   controls.paperHeight.value = 2;
   controls.scale.value = DEFAULT_SETTINGS.scale;
@@ -315,6 +332,8 @@ $('#file-input').addEventListener('change', async event => {
     const next = parseMap(text, nextDictionary);
     dictionarySelect.value = nextDictionary;
     refreshDictionary();
+    mapName.value = file.name.replace(/\.txt$/i, '').slice(0, 100);
+    refreshFilename();
     replaceMap(next, `Загружен файл ${file.name}`);
   } catch (error) { notify(`Карта не изменена. ${error.message}`); }
   event.target.value = '';
@@ -372,6 +391,96 @@ for (const radio of document.querySelectorAll('input[name="grid-mode"]')) radio.
   $('#step-fields').hidden = gridMode !== 'step';
   refreshGrid();
 });
+function refreshFilename() {
+  $('#filename-hint').textContent = `Файлы: ${['svg', 'png', 'txt'].map(extension => exportFilename(mapName.value, extension)).join(' / ')}`;
+}
+mapName.addEventListener('input', refreshFilename);
+
+function readPlacementGrid() {
+  const stepX = $('#placement-step-x').valueAsNumber;
+  const stepY = $('#placement-step-y').valueAsNumber;
+  if (![stepX, stepY].every(step => Number.isFinite(step) && step >= .000001 && step <= 1_000_000)) throw new Error('Шаг сетки X и Y должен быть от 0,000001 до 1 000 000 м.');
+  return { stepX, stepY, snap: $('#snap-markers').checked };
+}
+for (const id of ['placement-step-x', 'placement-step-y', 'snap-markers']) $(`#${id}`).addEventListener('input', () => {
+  try {
+    placementGrid = readPlacementGrid();
+    $('#placement-error').hidden = true;
+    update();
+  } catch (error) {
+    $('#placement-error').textContent = `${error.message} Последняя корректная сетка сохранена.`;
+    $('#placement-error').hidden = false;
+  }
+});
+function applyMarkerPosition(index, position) {
+  Object.assign(markers[index], position);
+  const row = $('#marker-rows').rows[index];
+  for (const axis of ['x', 'y']) row.querySelector(`input[data-field="${axis}"]`).value = position[axis];
+  syncSource();
+  update();
+}
+preview.addEventListener('pointerdown', event => {
+  const group = event.target.closest('[data-marker-index]');
+  if (!group || drag || !event.isPrimary || event.button !== 0) return;
+  try {
+    const current = validState();
+    const index = Number(group.dataset.markerIndex);
+    drag = {
+      index, pointerId: event.pointerId, origin: { ...markers[index] }, startX: event.clientX, startY: event.clientY,
+      bounds: $('#map-sheet').getBoundingClientRect(),
+      grid: { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight }, moved: false,
+    };
+    event.preventDefault();
+    group.focus({ preventScroll: true });
+    preview.setPointerCapture(event.pointerId);
+    preview.classList.add('is-dragging');
+  } catch (error) { drag = null; notify(error.message); }
+});
+function movePointer(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const dx = event.clientX - drag.startX;
+  const dy = event.clientY - drag.startY;
+  if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+  drag.moved = true;
+  const delta = { x: dx / drag.bounds.width * drag.grid.width, y: -dy / drag.bounds.height * drag.grid.height };
+  applyMarkerPosition(drag.index, moveOnGrid(drag.origin, delta, drag.grid));
+}
+preview.addEventListener('pointermove', event => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  cancelAnimationFrame(dragFrame);
+  dragFrame = requestAnimationFrame(() => movePointer(event));
+});
+function finishDrag(cancel = false, event = null) {
+  if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+  cancelAnimationFrame(dragFrame);
+  if (event && !cancel) movePointer(event);
+  const { index, pointerId, origin, moved } = drag;
+  drag = null;
+  preview.classList.remove('is-dragging');
+  if (preview.hasPointerCapture(pointerId)) preview.releasePointerCapture(pointerId);
+  if (cancel && moved) applyMarkerPosition(index, { x: origin.x, y: origin.y });
+  else if (moved) update();
+  preview.querySelector(`[data-marker-index="${index}"]`)?.focus({ preventScroll: true });
+}
+preview.addEventListener('pointerup', event => finishDrag(false, event));
+preview.addEventListener('pointercancel', event => finishDrag(true, event));
+preview.addEventListener('lostpointercapture', () => finishDrag(true));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && drag) { event.preventDefault(); finishDrag(true); }
+});
+preview.addEventListener('keydown', event => {
+  const group = event.target.closest('[data-marker-index]');
+  if (!group || drag || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  try {
+    const current = validState();
+    const grid = { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight };
+    const index = Number(group.dataset.markerIndex);
+    const delta = { x: event.key === 'ArrowLeft' ? -grid.stepX : event.key === 'ArrowRight' ? grid.stepX : 0, y: event.key === 'ArrowDown' ? -grid.stepY : event.key === 'ArrowUp' ? grid.stepY : 0 };
+    applyMarkerPosition(index, moveOnGrid(markers[index], delta, grid));
+    preview.querySelector(`[data-marker-index="${index}"]`).focus({ preventScroll: true });
+  } catch (error) { notify(error.message); }
+});
 for (const id of ['show-grid', 'show-labels']) $(`#${id}`).addEventListener('change', update);
 function setZoom(value) {
   zoom = Math.min(3, Math.max(.5, value));
@@ -399,14 +508,14 @@ function download(blob, filename) {
 $('#export-svg').addEventListener('click', () => {
   try {
     const current = validState();
-    download(new Blob([generateSvg(markers, current)], { type: 'image/svg+xml;charset=utf-8' }), 'aruco-map.svg');
+    download(new Blob([generateSvg(markers, current)], { type: 'image/svg+xml;charset=utf-8' }), exportFilename(mapName.value, 'svg'));
     notify('SVG скачан — векторная карта без сетки');
   } catch (error) { notify(error.message); }
 });
 $('#export-txt').addEventListener('click', () => {
   try {
     validState();
-    download(new Blob([serializeMap(markers, dictionarySelect.value)], { type: 'text/plain;charset=utf-8' }), 'aruco-map.txt');
+    download(new Blob([serializeMap(markers, dictionarySelect.value)], { type: 'text/plain;charset=utf-8' }), exportFilename(mapName.value, 'txt'));
     notify('TXT скачан — все восемь столбцов сохранены');
   } catch (error) { notify(error.message); }
 });
@@ -415,6 +524,7 @@ $('#export-png').addEventListener('click', async () => {
   try {
     const current = validState();
     const svg = generateSvg(markers, current);
+    const filename = exportFilename(mapName.value, 'png');
     pngBusy = true; update();
     $('#export-png').setAttribute('aria-busy', 'true');
     url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -429,7 +539,7 @@ $('#export-png').addEventListener('click', async () => {
     context.drawImage(image, 0, 0, current.width, current.height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('Недостаточно памяти для PNG. Уменьшите холст или скачайте SVG.');
-    download(blob, 'aruco-map.png');
+    download(blob, filename);
     notify('PNG скачан — белый фон, без сетки');
   } catch (error) { notify(error.message); }
   finally {
@@ -440,6 +550,7 @@ $('#export-png').addEventListener('click', async () => {
   }
 });
 
+refreshFilename();
 renderRows();
 refreshDictionary();
 syncSource();

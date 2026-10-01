@@ -40,6 +40,8 @@
         <section class="panel settings-panel" aria-labelledby="settings-heading">
           <div class="panel-heading"><h2 id="settings-heading">Словарь и поле для печати</h2></div>
           <div class="settings-fields">
+            <label class="full-field">Имя карты<input id="map-name" type="text" value="aruco-map" maxlength="100" autocomplete="off" aria-describedby="filename-hint"></label>
+            <p id="filename-hint" class="field-hint full-field">Файлы: aruco-map.svg / .png / .txt</p>
             <label class="full-field">Словарь меток<select id="dictionary-select"></select></label>
             <p id="dictionary-info" class="field-hint full-field"></p>
             <label>Ширина поля, м<input id="print-width" type="number" min="0.001" step="any" value="2" inputmode="decimal"></label>
@@ -109,6 +111,15 @@
 
       <section class="panel preview-panel" aria-labelledby="preview-heading">
         <div class="preview-heading"><div><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><h2 id="preview-heading">Предпросмотр</h2><span id="canvas-dimensions">2000 × 2000 px</span></div><div class="preview-options"><label><input id="show-grid" type="checkbox" checked> Сетка</label><label><input id="show-labels" type="checkbox" checked> ID</label></div></div>
+        <div class="placement-tools">
+          <div class="placement-fields">
+            <label>Шаг сетки X, м<input id="placement-step-x" type="number" value="0.1" min="0.000001" max="1000000" step="any" inputmode="decimal"></label>
+            <label>Шаг сетки Y, м<input id="placement-step-y" type="number" value="0.1" min="0.000001" max="1000000" step="any" inputmode="decimal"></label>
+            <label class="snap-toggle"><input id="snap-markers" type="checkbox" checked> Привязка к сетке</label>
+          </div>
+          <p class="field-hint">Перетаскивайте метки мышью или пальцем. Стрелки двигают выбранную метку на один шаг; Esc отменяет перетаскивание. При мелком шаге показаны укрупнённые линии.</p>
+          <p id="placement-error" class="error-message" role="alert" hidden></p>
+        </div>
         <div class="preview-canvas" id="preview-canvas">
           <div class="canvas-space" id="canvas-space"><div class="map-sheet" id="map-sheet"><div id="map-preview" aria-label="Карта маркеров ArUco"></div></div></div>
           <div id="preview-invalid" class="preview-invalid" hidden>Исправьте данные, чтобы обновить карту</div>
