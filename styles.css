@@ -157,3 +157,15 @@ footer strong{font-weight:400;color:var(--ink)}.origin-mark{font-size:22px;color
 @media(max-width:1150px){.placement-fields{flex-wrap:wrap;gap:10px}.placement-fields>label{flex-wrap:wrap}.placement-fields .snap-toggle{margin-left:0}}
 @media(max-width:600px){.placement-tools{padding:14px 15px}.placement-fields>label{gap:6px}.placement-fields input[type=number]{width:76px}.placement-fields .snap-toggle{flex-basis:100%}}
 #map-preview{touch-action:none}
+.coordinates-panel .coordinate-hint{padding:14px 22px 20px}
+#custom-origin-fields{margin-top:16px}
+.marker-table{min-width:410px}
+#map-preview text[data-marker-height]{pointer-events:auto;cursor:pointer}
+#map-preview text[data-marker-height]:focus-visible{outline:2px solid #007da6;outline-offset:3px}
+#height-dialog{width:min(420px,calc(100vw - 32px));padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--paper);color:var(--ink);box-shadow:0 20px 80px #0005}
+#height-dialog::backdrop{background:#0008}
+#height-marker-info{margin:12px 0 20px}
+#height-form>label{display:block;font-size:12px;margin-bottom:8px;color:var(--muted)}
+#marker-height{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--ink)}
+.height-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+@media(max-width:600px){.coordinates-panel .coordinate-hint{padding-left:18px;padding-right:18px}}

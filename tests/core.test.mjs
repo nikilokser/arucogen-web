@@ -48,7 +48,7 @@ test('out-of-canvas markers, overlaps and ignored rotations are visible warnings
   const warnings = mapWarnings(rows, { width: 1000, height: 1000, scale: 1000 });
   assert.ok(warnings.some(s => s.includes('холст')));
   assert.ok(warnings.some(s => s.includes('перекры')));
-  assert.ok(warnings.some(s => s.includes('3D')));
+  assert.ok(warnings.some(s => s.includes('Высота Z')));
 });
 
 test('different dictionaries accept their own ID ranges and render correct grid size', () => {

@@ -49,7 +49,22 @@
             <label class="full-field">Разрешение PNG, px/м<input id="canvas-scale" type="number" min="0.001" max="1000000" step="any" value="1000" inputmode="decimal"></label>
           </div>
           <p id="physical-size" class="field-hint">Поле для печати: 2 × 2 м</p>
-          <details class="format-help"><summary>Печать и совместимость</summary><p>SVG сохраняет размер поля в миллиметрах. Для печати в масштабе выберите «100% / фактический размер» и отключите подгонку. PNG сохраняется в пикселях по заданному разрешению.</p><p>Словарь определяет рисунки и диапазон ID. ArUco 4×4–7×7, Original, MIP и AprilTag генерируются по словарям OpenCV. Размер маркера включает чёрную рамку, без белого поля.</p><p>Все 8 столбцов сохраняются в TXT. Как в исходнике, <code>z</code> и углы не меняют 2D-карту. Сетка, оси и подписи ID не экспортируются.</p></details>
+          <details class="format-help"><summary>Печать и совместимость</summary><p>SVG сохраняет размер поля в миллиметрах. Для печати в масштабе выберите «100% / фактический размер» и отключите подгонку. PNG сохраняется в пикселях по заданному разрешению.</p><p>Словарь определяет рисунки и диапазон ID. ArUco 4×4–7×7, Original, MIP и AprilTag генерируются по словарям OpenCV. Размер маркера включает чёрную рамку, без белого поля.</p><p>Все 8 столбцов сохраняются в TXT. Высота <code>z</code> отображается в предпросмотре; углы не меняют 2D-карту. Сетка, оси, подписи ID и высоты не экспортируются в SVG/PNG.</p></details>
+        </section>
+
+        <section class="panel coordinates-panel" aria-labelledby="coordinates-heading">
+          <div class="panel-heading"><h2 id="coordinates-heading">Система координат</h2></div>
+          <div class="settings-fields">
+            <label class="full-field">Начало координат<select id="coordinate-origin" aria-label="Начало координат"><option value="center">Центр поля</option><option value="top-left">Верхний левый угол</option><option value="bottom-left">Нижний левый угол</option><option value="top-right">Верхний правый угол</option><option value="bottom-right">Нижний правый угол</option><option value="custom">Своя точка</option></select></label>
+            <label>Направление X<select id="coordinate-x" aria-label="Направление X"><option value="1">Вправо →</option><option value="-1">Влево ←</option></select></label>
+            <label>Направление Y<select id="coordinate-y" aria-label="Направление Y"><option value="1">Вверх ↑</option><option value="-1">Вниз ↓</option></select></label>
+          </div>
+          <div id="custom-origin-fields" class="settings-fields" hidden>
+            <label>От левого края, м<input id="origin-offset-x" type="number" value="1" step="any" inputmode="decimal"></label>
+            <label>От верхнего края, м<input id="origin-offset-y" type="number" value="1" step="any" inputmode="decimal"></label>
+          </div>
+          <p class="field-hint coordinate-hint">Положение меток сохраняется, меняются их X и Y. Привязка сетки считается от выбранного начала. Высота Z направлена вверх.</p>
+          <p id="coordinate-error" class="error-box" role="alert" hidden></p>
         </section>
 
         <section class="panel grid-panel" aria-labelledby="grid-heading">
@@ -90,7 +105,7 @@
             <p id="marker-range-hint" class="field-hint">Размер и координаты — в метрах. ID от 0 до 49.</p>
             <div class="table-scroll">
               <table class="marker-table"><caption class="visually-hidden">Параметры маркеров</caption>
-                <thead><tr><th scope="col">ID</th><th scope="col">Размер, м</th><th scope="col">X, м</th><th scope="col">Y, м</th><th scope="col"><span class="visually-hidden">Удалить</span></th></tr></thead>
+                <thead><tr><th scope="col">ID</th><th scope="col">Размер, м</th><th scope="col">X, м</th><th scope="col">Y, м</th><th scope="col">Z, м</th><th scope="col"><span class="visually-hidden">Удалить</span></th></tr></thead>
                 <tbody id="marker-rows"></tbody>
               </table>
             </div>
@@ -104,7 +119,7 @@
             <div class="txt-actions"><span id="txt-state">Все изменения применены</span><button id="apply-txt" class="secondary-button" type="button">Применить TXT</button></div>
           </div>
           <div id="validation-error" class="error-box" role="alert" hidden></div>
-          <p class="coordinate-note"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 25V5m0 20h20M5 8l3-3 3 3m14 14 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Начало координат — центр холста.<br>Ось X направлена вправо, Y — вверх.</span></p>
+          <p class="coordinate-note"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 25V5m0 20h20M5 8l3-3 3 3m14 14 3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span><span id="coordinate-note">Начало — центр поля. X →, Y ↑.</span></span></p>
         </section>
 
       </div>
@@ -117,14 +132,14 @@
             <label>Шаг сетки Y, м<input id="placement-step-y" type="number" value="0.1" min="0.000001" max="1000000" step="any" inputmode="decimal"></label>
             <label class="snap-toggle"><input id="snap-markers" type="checkbox" checked> Привязка к сетке</label>
           </div>
-          <p class="field-hint">Перетаскивайте метки мышью или пальцем. Стрелки двигают выбранную метку на один шаг; Esc отменяет перетаскивание. При мелком шаге показаны укрупнённые линии.</p>
+          <p class="field-hint">Перетаскивайте метки мышью или пальцем. Двойной клик открывает высоту Z. Стрелки двигают выбранную метку на один шаг; Esc отменяет перетаскивание. При мелком шаге показаны укрупнённые линии.</p>
           <p id="placement-error" class="error-message" role="alert" hidden></p>
         </div>
         <div class="preview-canvas" id="preview-canvas">
           <div class="canvas-space" id="canvas-space"><div class="map-sheet" id="map-sheet"><div id="map-preview" aria-label="Карта маркеров ArUco"></div></div></div>
           <div id="preview-invalid" class="preview-invalid" hidden>Исправьте данные, чтобы обновить карту</div>
         </div>
-        <div class="preview-bottom"><span class="preview-legend"><span class="axis-dot" aria-hidden="true"></span>Центр карты: (0, 0)</span><div class="zoom-controls"><button type="button" id="zoom-out" aria-label="Уменьшить масштаб просмотра">−</button><output id="zoom-level" aria-label="Масштаб просмотра">100%</output><button type="button" id="zoom-in" aria-label="Увеличить масштаб просмотра">+</button><button type="button" id="zoom-fit" class="fit-button">Вписать</button></div></div>
+        <div class="preview-bottom"><span class="preview-legend"><span class="axis-dot" aria-hidden="true"></span><span id="origin-legend">Начало: (0, 0)</span></span><div class="zoom-controls"><button type="button" id="zoom-out" aria-label="Уменьшить масштаб просмотра">−</button><output id="zoom-level" aria-label="Масштаб просмотра">100%</output><button type="button" id="zoom-in" aria-label="Увеличить масштаб просмотра">+</button><button type="button" id="zoom-fit" class="fit-button">Вписать</button></div></div>
         <div id="map-measurements" class="map-measurements"></div>
         <div id="warnings" class="warnings" aria-live="polite" hidden></div>
         <div class="export-area"><div class="export-heading"><h2>Скачать карту</h2><p>Чистый файл, без сетки и подписей</p></div><div class="export-buttons"><button id="export-svg" class="primary-button" type="button" aria-label="Скачать SVG">SVG <span class="button-detail">Вектор</span> <span aria-hidden="true">↓</span></button><button id="export-png" class="secondary-button" type="button" aria-label="Скачать PNG">PNG <span class="button-detail">Изображение</span> <span aria-hidden="true">↓</span></button><button id="export-txt" class="secondary-button" type="button" aria-label="Скачать TXT">TXT <span class="button-detail">Координаты</span> <span aria-hidden="true">↓</span></button></div></div>
@@ -134,6 +149,16 @@
   </main>
 
   <footer><div class="origin-mark" aria-hidden="true">⌘</div><p><strong>Веб‑адаптация / производный форк <a href="https://github.com/GeBondar/aruco_map_generator" target="_blank" rel="noopener noreferrer">GeBondar/aruco_map_generator</a>.</strong><br>Оригинальный генератор и алгоритм размещения — GeBondar. Веб-интерфейс — <a href="https://github.com/nikilokser/arucogen-web" target="_blank" rel="noopener noreferrer">arucogen-web</a>.</p><span class="footer-private">Файлы остаются на вашем устройстве</span></footer>
+  <dialog id="height-dialog" aria-labelledby="height-heading">
+    <form id="height-form" novalidate>
+      <h2 id="height-heading">Высота метки</h2>
+      <p id="height-marker-info" class="field-hint"></p>
+      <label for="marker-height">Высота Z, м</label>
+      <input id="marker-height" type="number" step="any" inputmode="decimal" required>
+      <p id="height-error" class="error-message" role="alert" hidden></p>
+      <div class="height-actions"><button id="cancel-height" type="button" class="secondary-button">Отмена</button><button type="submit" class="primary-button">Сохранить высоту</button></div>
+    </form>
+  </dialog>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

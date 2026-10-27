@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS, DEFAULT_DICTIONARY, DICTIONARY_NAMES, FIELDS, MAX_MARKERS, parseMap, serializeMap, validateMap, validateSettings, generateSvg, markerBox, mapWarnings, getDictionary, dictionaryFromText, renderDimensions } from './core.js';
 import { generateGrid } from './grid.js';
 import { exportFilename, moveOnGrid } from './interaction.js';
+import { DEFAULT_FRAME, toWorld, fromWorld, validateFrame, frameFromText } from './coordinates.js';
 import { EXAMPLE } from './example.js';
 
 const $ = selector => document.querySelector(selector);
@@ -26,6 +27,8 @@ const newMap = () => [
 ];
 let markers = newMap();
 let settings = { ...DEFAULT_SETTINGS };
+let coordinateFrame = { ...DEFAULT_FRAME };
+let heightMarker = null;
 let zoom = 1;
 let sourceDirty = false;
 let pngBusy = false;
@@ -41,7 +44,7 @@ const gridFields = { columns: $('#grid-columns'), rows: $('#grid-rows'), length:
 let gridMode = 'span';
 let previousDictionary = DEFAULT_DICTIONARY;
 const exportButtons = [$('#export-svg'), $('#export-png'), $('#export-txt')];
-const labels = { id: 'ID', length: 'Размер', x: 'X', y: 'Y' };
+const labels = { id: 'ID', length: 'Размер', x: 'X', y: 'Y', z: 'Z' };
 const formatMeters = value => Number(value.toPrecision(6)).toLocaleString('ru-RU');
 
 for (const family of ['4X4', '5X5', '6X6', '7X7', 'ARUCO', 'APRILTAG']) {
@@ -81,7 +84,7 @@ function notify(message) {
 }
 
 function syncSource() {
-  $('#txt-source').value = `# dictionary: ${dictionarySelect.value}\n# ${FIELDS.join(' ')}\n` + markers.map(m => FIELDS.map(f => m[f]).join('\t')).join('\n') + '\n';
+  $('#txt-source').value = `# dictionary: ${dictionarySelect.value}\n# coordinates: ${JSON.stringify(coordinateFrame)}\n# ${FIELDS.join(' ')}\n` + markers.map(m => FIELDS.map(f => m[f]).join('\t')).join('\n') + '\n';
   sourceDirty = false;
   $('#txt-error').hidden = true;
   $('#txt-state').textContent = 'Все изменения применены';
@@ -92,7 +95,7 @@ function renderRows() {
   markers.forEach((marker, index) => {
     const row = document.createElement('tr');
     row.dataset.index = index;
-    for (const field of ['id', 'length', 'x', 'y']) {
+    for (const field of ['id', 'length', 'x', 'y', 'z']) {
       const cell = document.createElement('td');
       const input = document.createElement('input');
       input.type = 'number';
@@ -124,7 +127,7 @@ function renderRows() {
 
 function readSettings() {
   const dimensions = Object.fromEntries(Object.entries(controls).map(([field, input]) => [field, input.valueAsNumber]));
-  return validateSettings({ ...dimensions, width: Math.round(dimensions.paperWidth * dimensions.scale), height: Math.round(dimensions.paperHeight * dimensions.scale), dictionary: dictionarySelect.value });
+  return validateSettings({ ...dimensions, width: Math.round(dimensions.paperWidth * dimensions.scale), height: Math.round(dimensions.paperHeight * dimensions.scale), dictionary: dictionarySelect.value, frame: coordinateFrame });
 }
 
 function validState() {
@@ -156,29 +159,33 @@ function renderPreview() {
   const sheetWidth = fitSheet();
   const dimensions = renderDimensions(settings);
   const unit = dimensions.width / sheetWidth;
+  const origin = { x: dimensions.width / 2 + coordinateFrame.originX * settings.scale, y: dimensions.height / 2 - coordinateFrame.originY * settings.scale };
   let svg = generateSvg(markers, settings);
   if ($('#show-grid').checked) {
     const visibleStep = step => { const pixels = step * settings.scale; return pixels * 10 ** Math.max(0, Math.ceil(Math.log10(16 * unit / pixels))); };
     const pixelStepX = visibleStep(placementGrid.stepX);
     const pixelStepY = visibleStep(placementGrid.stepY);
     const strokeWidth = .65 * unit;
-    const grid = `<defs><pattern id="preview-grid" width="${pixelStepX}" height="${pixelStepY}" patternUnits="userSpaceOnUse" x="${dimensions.width / 2}" y="${dimensions.height / 2}"><path d="M ${pixelStepX} 0 H 0 V ${pixelStepY}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${dimensions.width / 2}" y1="0" x2="${dimensions.width / 2}" y2="${dimensions.height}"/><line x1="0" y1="${dimensions.height / 2}" x2="${dimensions.width}" y2="${dimensions.height / 2}"/></g><circle cx="${dimensions.width / 2}" cy="${dimensions.height / 2}" r="${2.5 * unit}" fill="#1ebcf1"/>`;
+    const grid = `<defs><pattern id="preview-grid" width="${pixelStepX}" height="${pixelStepY}" patternUnits="userSpaceOnUse" x="${origin.x}" y="${origin.y}"><path d="M ${pixelStepX} 0 H 0 V ${pixelStepY}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${origin.x}" y1="0" x2="${origin.x}" y2="${dimensions.height}"/><line x1="0" y1="${origin.y}" x2="${dimensions.width}" y2="${origin.y}"/></g><circle cx="${origin.x}" cy="${origin.y}" r="${2.5 * unit}" fill="#1ebcf1"/>`;
     svg = svg.replace(/(<g data-marker-id=)/, grid + '$1');
   }
-  if ($('#show-labels').checked) {
-    const markerLabels = markers.map(marker => {
-      const box = markerBox(marker, settings);
-      return `<text x="${box.x + box.size / 2}" y="${box.y + box.size + 13 * unit}" text-anchor="middle" font-size="${10 * unit}" font-family="Arial,sans-serif" fill="#516984">${marker.id}</text>`;
-    }).join('');
-    svg = svg.replace('</svg>', markerLabels + '</svg>');
-  }
+  const markerLabels = markers.map((marker, index) => {
+    const box = markerBox(marker, settings);
+    const x = Math.max(40 * unit, Math.min(dimensions.width - 40 * unit, box.x + box.size / 2));
+    const showId = $('#show-labels').checked;
+    const belowFits = box.y + box.size + (showId ? 29 : 16) * unit <= dimensions.height;
+    const labelY = belowFits ? box.y + box.size + 13 * unit : Math.max(11 * unit, box.y - (showId ? 17 : 4) * unit);
+    const idLabel = showId ? `<text x="${x}" y="${labelY}" text-anchor="middle" font-size="${10 * unit}" font-family="Arial,sans-serif" fill="#516984">${marker.id}</text>` : '';
+    return idLabel + `<text data-marker-height="${index}" x="${x}" y="${labelY + (showId ? 13 : 0) * unit}" text-anchor="middle" font-size="${10 * unit}" font-family="Arial,sans-serif" fill="#334e68" role="button" tabindex="0" aria-label="Изменить высоту метки ${marker.id}, строка ${index + 1}">Z: ${formatMeters(marker.z)} м</text>`;
+  }).join('');
+  svg = svg.replace('</svg>', markerLabels + '</svg>');
   // Content is generated exclusively from finite validated numbers and fixed strings.
   preview.innerHTML = svg;
   preview.querySelectorAll('[data-marker-id]').forEach((group, index) => {
     group.dataset.markerIndex = index;
     group.setAttribute('tabindex', '0');
     group.setAttribute('role', 'button');
-    group.setAttribute('aria-label', `Маркер ${markers[index].id}, строка ${index + 1}. Перемещение стрелками`);
+    group.setAttribute('aria-label', `Маркер ${markers[index].id}, строка ${index + 1}. Перемещение стрелками. Высота ${formatMeters(markers[index].z)} м. Enter — изменить высоту`);
     if (drag?.index === index) group.classList.add('dragged-marker');
   });
 }
@@ -224,8 +231,10 @@ function applyText() {
   try {
     const nextDictionary = dictionaryFromText($('#txt-source').value, dictionarySelect.value);
     const next = parseMap($('#txt-source').value, nextDictionary);
+    const nextFrame = frameFromText($('#txt-source').value, coordinateFrame);
     dictionarySelect.value = nextDictionary;
     refreshDictionary();
+    installFrame(nextFrame);
     markers = next;
     sourceDirty = false;
     renderRows();
@@ -291,7 +300,7 @@ $('#add-marker').addEventListener('click', () => {
   const count = getDictionary(dictionarySelect.value).count;
   const id = Array.from({ length: count }, (_, i) => i).find(i => !used.has(i));
   if (id === undefined) { notify(`Все ${count} ID уже используются. Удалите маркер или добавьте повторный ID через TXT.`); return; }
-  markers.push({ id, length: .185, x: 0, y: 0, z: 0, rot_z: 0, rot_y: 0, rot_x: 0 });
+  markers.push({ id, length: .185, ...fromWorld({ x: 0, y: 0 }, coordinateFrame), z: 0, rot_z: 0, rot_y: 0, rot_x: 0 });
   renderRows(); syncSource(); update();
   $('#marker-rows').lastElementChild.querySelector('input').focus();
 });
@@ -301,6 +310,7 @@ function replaceMap(next, message) {
   renderRows(); syncSource(); setTab('table'); update(); refreshGrid(); notify(message);
 }
 $('#load-example').addEventListener('click', () => {
+  installFrame(DEFAULT_FRAME, 'center');
   dictionarySelect.value = DEFAULT_DICTIONARY;
   refreshDictionary();
   replaceMap(parseMap(EXAMPLE), 'Загружен пример GeBondar: 13 маркеров, DICT_4X4_50');
@@ -311,6 +321,7 @@ $('#new-map').addEventListener('click', () => {
   controls.paperWidth.value = 2;
   controls.paperHeight.value = 2;
   controls.scale.value = DEFAULT_SETTINGS.scale;
+  installFrame(DEFAULT_FRAME, 'center');
   dictionarySelect.value = DEFAULT_DICTIONARY;
   refreshDictionary();
   for (const input of Object.values(gridFields)) input.value = input.defaultValue;
@@ -330,8 +341,10 @@ $('#file-input').addEventListener('change', async event => {
     const text = await file.text();
     const nextDictionary = dictionaryFromText(text, dictionarySelect.value);
     const next = parseMap(text, nextDictionary);
+    const nextFrame = frameFromText(text);
     dictionarySelect.value = nextDictionary;
     refreshDictionary();
+    installFrame(nextFrame);
     mapName.value = file.name.replace(/\.txt$/i, '').slice(0, 100);
     refreshFilename();
     replaceMap(next, `Загружен файл ${file.name}`);
@@ -339,7 +352,10 @@ $('#file-input').addEventListener('change', async event => {
   event.target.value = '';
 });
 
-Object.values(controls).forEach(input => input.addEventListener('input', () => { update(); refreshGrid(); }));
+Object.values(controls).forEach(input => input.addEventListener('input', () => {
+  if (input !== controls.scale) changeCoordinateFrame();
+  update(); refreshGrid();
+}));
 dictionarySelect.addEventListener('change', () => {
   refreshDictionary();
   // Changing the dictionary preserves the map and any unapplied TXT draft.
@@ -353,7 +369,8 @@ function readGrid() {
 }
 function currentGrid() {
   const current = readSettings();
-  return generateGrid(readGrid(), dictionarySelect.value, { width: current.paperWidth, height: current.paperHeight });
+  const grid = generateGrid(readGrid(), dictionarySelect.value, { width: current.paperWidth, height: current.paperHeight });
+  return { ...grid, markers: grid.markers.map(marker => ({ ...marker, ...fromWorld(marker, coordinateFrame) })) };
 }
 function refreshGrid(apply = false) {
   const options = readGrid();
@@ -390,6 +407,90 @@ for (const radio of document.querySelectorAll('input[name="grid-mode"]')) radio.
   $('#span-fields').hidden = gridMode !== 'span';
   $('#step-fields').hidden = gridMode !== 'step';
   refreshGrid();
+});
+function installFrame(frame, preset = null) {
+  coordinateFrame = validateFrame(frame);
+  $('#coordinate-origin').value = preset || (frame.originX === 0 && frame.originY === 0 ? 'center' : 'custom');
+  $('#coordinate-x').value = frame.directionX;
+  $('#coordinate-y').value = frame.directionY;
+  $('#origin-offset-x').value = Number(((controls.paperWidth.valueAsNumber || 2) / 2 + frame.originX).toPrecision(14));
+  $('#origin-offset-y').value = Number(((controls.paperHeight.valueAsNumber || 2) / 2 - frame.originY).toPrecision(14));
+  $('#custom-origin-fields').hidden = $('#coordinate-origin').value !== 'custom';
+  $('#coordinate-note').textContent = `Начало: ${$('#coordinate-origin').selectedOptions[0].textContent}. X ${frame.directionX === 1 ? '→' : '←'}, Y ${frame.directionY === 1 ? '↑' : '↓'}. Z ↑.`;
+  $('#origin-legend').textContent = `Начало (0, 0) · X ${frame.directionX === 1 ? '→' : '←'} · Y ${frame.directionY === 1 ? '↑' : '↓'}`;
+  $('#coordinate-error').hidden = true;
+}
+function changeCoordinateFrame() {
+  $('#custom-origin-fields').hidden = $('#coordinate-origin').value !== 'custom';
+  try {
+    const current = validState();
+    const preset = $('#coordinate-origin').value;
+    let originX = 0, originY = 0;
+    if (preset === 'custom') {
+      originX = $('#origin-offset-x').valueAsNumber - current.paperWidth / 2;
+      originY = current.paperHeight / 2 - $('#origin-offset-y').valueAsNumber;
+    } else {
+      if (preset.includes('left')) originX = -current.paperWidth / 2;
+      if (preset.includes('right')) originX = current.paperWidth / 2;
+      if (preset.includes('top')) originY = current.paperHeight / 2;
+      if (preset.includes('bottom')) originY = -current.paperHeight / 2;
+    }
+    const nextFrame = validateFrame({ originX, originY, directionX: Number($('#coordinate-x').value), directionY: Number($('#coordinate-y').value) });
+    const next = markers.map(marker => ({ ...marker, ...fromWorld(toWorld(marker, coordinateFrame), nextFrame) }));
+    validateMap(next, dictionarySelect.value);
+    markers = next;
+    installFrame(nextFrame, preset);
+    renderRows(); syncSource(); update(); refreshGrid();
+  } catch (error) {
+    $('#coordinate-error').textContent = `${error.message} Последняя корректная система координат сохранена.`;
+    $('#coordinate-error').hidden = false;
+  }
+}
+for (const id of ['coordinate-origin', 'coordinate-x', 'coordinate-y']) $(`#${id}`).addEventListener('change', changeCoordinateFrame);
+for (const id of ['origin-offset-x', 'origin-offset-y']) $(`#${id}`).addEventListener('input', changeCoordinateFrame);
+
+function openHeightEditor(index) {
+  try {
+    validState();
+    heightMarker = markers[index];
+    if (!heightMarker) return;
+    $('#height-marker-info').textContent = `ID ${heightMarker.id}, строка ${index + 1}. Высота направлена вверх и сохраняется в TXT.`;
+    $('#marker-height').value = heightMarker.z;
+    $('#height-error').hidden = true;
+    $('#height-dialog').showModal();
+    $('#marker-height').focus();
+    $('#marker-height').select();
+  } catch (error) { notify(error.message); }
+}
+preview.addEventListener('dblclick', event => {
+  // Pointer capture can retarget the click to the preview container.
+  const target = event.target.closest('[data-marker-index], [data-marker-height]') || document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-marker-index], [data-marker-height]');
+  if (target) { event.preventDefault(); openHeightEditor(Number(target.dataset.markerIndex ?? target.dataset.markerHeight)); }
+});
+preview.addEventListener('keydown', event => {
+  if (!['Enter', ' '].includes(event.key)) return;
+  const target = event.target.closest('[data-marker-index], [data-marker-height]');
+  if (target) { event.preventDefault(); openHeightEditor(Number(target.dataset.markerIndex ?? target.dataset.markerHeight)); }
+});
+$('#cancel-height').addEventListener('click', () => $('#height-dialog').close());
+$('#height-dialog').addEventListener('close', () => {
+  const index = markers.indexOf(heightMarker);
+  preview.querySelector(`[data-marker-index="${index}"]`)?.focus({ preventScroll: true });
+  heightMarker = null;
+});
+$('#height-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const z = $('#marker-height').valueAsNumber;
+  const index = markers.indexOf(heightMarker);
+  if (!Number.isFinite(z) || index < 0) {
+    $('#height-error').textContent = index < 0 ? 'Карта изменилась. Откройте высоту метки заново.' : 'Введите конечное число для высоты Z в метрах.';
+    $('#height-error').hidden = false;
+    return;
+  }
+  heightMarker.z = z;
+  $('#marker-rows').rows[index].querySelector('input[data-field="z"]').value = z;
+  syncSource(); update();
+  $('#height-dialog').close();
 });
 function refreshFilename() {
   $('#filename-hint').textContent = `Файлы: ${['svg', 'png', 'txt'].map(extension => exportFilename(mapName.value, extension)).join(' / ')}`;
@@ -428,7 +529,7 @@ preview.addEventListener('pointerdown', event => {
     drag = {
       index, pointerId: event.pointerId, origin: { ...markers[index] }, startX: event.clientX, startY: event.clientY,
       bounds: $('#map-sheet').getBoundingClientRect(),
-      grid: { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight }, moved: false,
+      grid: { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight, frame: { ...coordinateFrame } }, moved: false,
     };
     event.preventDefault();
     group.focus({ preventScroll: true });
@@ -442,7 +543,7 @@ function movePointer(event) {
   const dy = event.clientY - drag.startY;
   if (!drag.moved && Math.hypot(dx, dy) < 3) return;
   drag.moved = true;
-  const delta = { x: dx / drag.bounds.width * drag.grid.width, y: -dy / drag.bounds.height * drag.grid.height };
+  const delta = { x: dx / drag.bounds.width * drag.grid.width * drag.grid.frame.directionX, y: -dy / drag.bounds.height * drag.grid.height * drag.grid.frame.directionY };
   applyMarkerPosition(drag.index, moveOnGrid(drag.origin, delta, drag.grid));
 }
 preview.addEventListener('pointermove', event => {
@@ -474,9 +575,9 @@ preview.addEventListener('keydown', event => {
   event.preventDefault();
   try {
     const current = validState();
-    const grid = { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight };
+    const grid = { ...readPlacementGrid(), width: current.paperWidth, height: current.paperHeight, frame: coordinateFrame };
     const index = Number(group.dataset.markerIndex);
-    const delta = { x: event.key === 'ArrowLeft' ? -grid.stepX : event.key === 'ArrowRight' ? grid.stepX : 0, y: event.key === 'ArrowDown' ? -grid.stepY : event.key === 'ArrowUp' ? grid.stepY : 0 };
+    const delta = { x: event.key === 'ArrowLeft' ? -grid.stepX * coordinateFrame.directionX : event.key === 'ArrowRight' ? grid.stepX * coordinateFrame.directionX : 0, y: event.key === 'ArrowDown' ? -grid.stepY * coordinateFrame.directionY : event.key === 'ArrowUp' ? grid.stepY * coordinateFrame.directionY : 0 };
     applyMarkerPosition(index, moveOnGrid(markers[index], delta, grid));
     preview.querySelector(`[data-marker-index="${index}"]`).focus({ preventScroll: true });
   } catch (error) { notify(error.message); }
@@ -515,7 +616,7 @@ $('#export-svg').addEventListener('click', () => {
 $('#export-txt').addEventListener('click', () => {
   try {
     validState();
-    download(new Blob([serializeMap(markers, dictionarySelect.value)], { type: 'text/plain;charset=utf-8' }), exportFilename(mapName.value, 'txt'));
+    download(new Blob([serializeMap(markers, dictionarySelect.value, coordinateFrame)], { type: 'text/plain;charset=utf-8' }), exportFilename(mapName.value, 'txt'));
     notify('TXT скачан — все восемь столбцов сохранены');
   } catch (error) { notify(error.message); }
 });
@@ -550,6 +651,7 @@ $('#export-png').addEventListener('click', async () => {
   }
 });
 
+installFrame(DEFAULT_FRAME, 'center');
 refreshFilename();
 renderRows();
 refreshDictionary();

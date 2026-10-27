@@ -1,3 +1,4 @@
+import { DEFAULT_FRAME, toWorld, validateFrame } from './coordinates.js';
 import { DICTIONARIES } from './dictionary.js';
 
 // Web adaptation of GeBondar/aruco_map_generator. See upstream/ORIGIN.md.
@@ -69,9 +70,9 @@ export function parseMap(text, dictionary = DEFAULT_DICTIONARY) {
   return validateMap(markers, dictionary);
 }
 
-export function serializeMap(markers, dictionary = DEFAULT_DICTIONARY) {
+export function serializeMap(markers, dictionary = DEFAULT_DICTIONARY, frame) {
   validateMap(markers, dictionary);
-  return `# dictionary: ${dictionary}\n# ${FIELDS.join(' ')}\n` + markers.map(marker => FIELDS.map(field => marker[field]).join('\t')).join('\n') + '\n';
+  return `# dictionary: ${dictionary}\n${frame ? `# coordinates: ${JSON.stringify(validateFrame(frame))}\n` : ''}# ${FIELDS.join(' ')}\n` + markers.map(marker => FIELDS.map(field => marker[field]).join('\t')).join('\n') + '\n';
 }
 
 export function validateSettings(settings) {
@@ -95,6 +96,7 @@ export function validateSettings(settings) {
     result.paperWidth = settings.paperWidth;
     result.paperHeight = settings.paperHeight;
   }
+  if (settings.frame !== undefined) result.frame = validateFrame(settings.frame);
   return result;
 }
 
@@ -120,8 +122,9 @@ export function markerRects(id, dictionary = DEFAULT_DICTIONARY) {
 export function markerBox(marker, settings) {
   const { width, height } = renderDimensions(settings);
   const size = marker.length * settings.scale;
-  return { x: width / 2 + marker.x * settings.scale - size / 2,
-    y: height / 2 - marker.y * settings.scale - size / 2, size };
+  const world = toWorld(marker, settings.frame || DEFAULT_FRAME);
+  return { x: width / 2 + world.x * settings.scale - size / 2,
+    y: height / 2 - world.y * settings.scale - size / 2, size };
 }
 
 export function renderDimensions(settings) {
@@ -166,7 +169,7 @@ export function mapWarnings(markers, settings) {
   if (overlaps) warnings.push('Маркеры перекрываются. Измените координаты или размеры для корректного распознавания.');
   if (new Set(markers.map(m => m.id)).size < markers.length) warnings.push('Некоторые ID повторяются: робот не сможет различить одинаковые маркеры.');
   if (markers.some(m => m.z !== 0 || m.rot_z !== 0 || m.rot_y !== 0 || m.rot_x !== 0)) {
-    warnings.push('3D-координата z и углы сохранены в TXT, но не применяются к 2D-карте, как в исходном проекте.');
+    warnings.push('Высота Z и углы сохранены в TXT. На плоской карте высота показана подписью и не меняет положение или размер метки.');
   }
   const minPixels = (getDictionary(settings.dictionary).markerSize + 2) * 3;
   if (boxes.some(box => box.size < minPixels)) warnings.push(`В PNG есть маркеры меньше ${minPixels} пикселей: увеличьте разрешение для надёжного распознавания.`);
