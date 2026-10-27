@@ -275,6 +275,35 @@ try {
   assert.equal(frameFromText(await page.locator('#txt-source').inputValue()).originX, -1.2);
   await page.getByLabel('Ширина поля, м', { exact: true }).fill('2');
   assert.equal(frameFromText(await page.locator('#txt-source').inputValue()).originX, -.7);
+  await page.getByLabel('Сетка', { exact: true }).uncheck();
+  assert.equal(await page.locator('.origin-guide').count(), 1);
+  assert.match(await page.locator('.origin-guide').textContent(), /Начало.*0, 0/);
+  for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center']) {
+    await page.getByLabel('Начало координат', { exact: true }).selectOption(corner);
+    const originPoint = await page.locator('[data-origin-point]').boundingBox();
+    const canvasBox = await page.locator('#preview-canvas').boundingBox();
+    assert.ok(originPoint.x >= canvasBox.x && originPoint.y >= canvasBox.y);
+    assert.ok(originPoint.x + originPoint.width <= canvasBox.x + canvasBox.width);
+    assert.ok(originPoint.y + originPoint.height <= canvasBox.y + canvasBox.height);
+    assert.equal(await page.locator('.origin-guide [data-axis]').count(), 2);
+  }
+  const xAxis = page.locator('.origin-guide [data-axis="x"]');
+  const yAxis = page.locator('.origin-guide [data-axis="y"]');
+  assert.ok(Number(await xAxis.getAttribute('x2')) < Number(await xAxis.getAttribute('x1')));
+  assert.ok(Number(await yAxis.getAttribute('y2')) > Number(await yAxis.getAttribute('y1')));
+  await page.getByLabel('Начало координат', { exact: true }).selectOption('custom');
+  await page.getByLabel('От левого края, м', { exact: true }).fill('-0.5');
+  assert.equal(await page.locator('.origin-guide').getAttribute('data-outside'), 'true');
+  assert.match(await page.locator('.origin-guide').textContent(), /Начало вне поля/);
+  await page.getByLabel('Ширина поля, м', { exact: true }).fill('0.1');
+  const outsideBadge = await page.locator('.origin-guide rect').boundingBox();
+  const outsideCanvas = await page.locator('#preview-canvas').boundingBox();
+  assert.ok(outsideBadge.x >= outsideCanvas.x && outsideBadge.x + outsideBadge.width <= outsideCanvas.x + outsideCanvas.width);
+  await page.getByLabel('Ширина поля, м', { exact: true }).fill('0.001');
+  const narrowBadge = await page.locator('.origin-guide rect').boundingBox();
+  assert.ok(Math.abs(narrowBadge.width - 165.5) < 1, `Origin badge width: ${narrowBadge.width}; ${await page.locator('.origin-guide').getAttribute('data-outside')}`);
+  await page.getByLabel('Ширина поля, м', { exact: true }).fill('2');
+  await page.getByLabel('Начало координат', { exact: true }).selectOption('center');
   await page.screenshot({ path: 'test-results/desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'test-results/mobile.png', fullPage: true });
@@ -295,7 +324,7 @@ try {
   assert.equal(await touchPage.locator('#marker-rows input[data-field="y"]').first().inputValue(), '0.2');
   await touchPage.close();
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: example, import, editing, 22 dictionaries, live grid, protected TXT drafts, center-spacing modes, persistent dark theme, white exports, physical SVG, PNG/TXT, validation, named downloads, snapped/free pointer drag, zoom, keyboard movement, duplicate IDs, cancellation, mobile touch drag, coordinate frames, custom origin, height editing, framed TXT round trip, mobile layout.');
+  console.log('Browser checks passed: example, import, editing, 22 dictionaries, live grid, protected TXT drafts, center-spacing modes, persistent dark theme, white exports, physical SVG, PNG/TXT, validation, named downloads, snapped/free pointer drag, zoom, keyboard movement, duplicate IDs, cancellation, mobile touch drag, coordinate frames, custom origin, height editing, framed TXT round trip, visible origin guide, all corners, outside-field indicator, mobile layout.');
 } finally {
   await browser?.close();
   server?.kill();

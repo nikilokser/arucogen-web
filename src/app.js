@@ -140,19 +140,39 @@ function validState() {
 function fitSheet() {
   const canvas = $('#preview-canvas');
   const dimensions = renderDimensions(settings);
-  const width = Math.max(1, canvas.clientWidth - 80);
-  const height = Math.max(1, canvas.clientHeight - 80);
+  const width = Math.max(1, canvas.clientWidth - 128);
+  const height = Math.max(1, canvas.clientHeight - 128);
   const factor = Math.min(width / dimensions.width, height / dimensions.height) * zoom;
   const sheetWidth = dimensions.width * factor;
   const sheetHeight = dimensions.height * factor;
   $('#map-sheet').style.width = `${sheetWidth}px`;
   $('#map-sheet').style.height = `${sheetHeight}px`;
-  $('#canvas-space').style.width = `${Math.max(canvas.clientWidth, sheetWidth + 80)}px`;
-  $('#canvas-space').style.height = `${Math.max(canvas.clientHeight, sheetHeight + 80)}px`;
+  $('#canvas-space').style.width = `${Math.max(canvas.clientWidth, sheetWidth + 128)}px`;
+  $('#canvas-space').style.height = `${Math.max(canvas.clientHeight, sheetHeight + 128)}px`;
   $('#zoom-level').textContent = `${Math.round(zoom * 100)}%`;
   $('#zoom-out').disabled = zoom <= .5;
   $('#zoom-in').disabled = zoom >= 3;
-  return Math.max(1, sheetWidth);
+  return $('#map-sheet').getBoundingClientRect().width || sheetWidth;
+}
+
+function buildOriginGuide(dimensions, origin, unit) {
+  const { width, height } = dimensions;
+  const outside = origin.x < 0 || origin.y < 0 || origin.x > width || origin.y > height;
+  const x = Math.max(0, Math.min(width, origin.x));
+  const y = Math.max(0, Math.min(height, origin.y));
+  const badgeWidth = outside ? 164 : 112;
+  const desiredBadgeX = x > width - (badgeWidth + 14) * unit ? -badgeWidth - 14 : 14;
+  const horizontalRoom = Math.max(64, ($('#preview-canvas').clientWidth - width / unit) / 2);
+  const badgeX = Math.max(-x / unit - horizontalRoom + 8, Math.min((width - x) / unit + horizontalRoom - badgeWidth - 8, desiredBadgeX));
+  const badgeY = y > height - 42 * unit ? -32 : 18;
+  const horizontal = origin.x < 0 ? -1 : origin.x > width ? 1 : 0;
+  const vertical = origin.y < 0 ? -1 : origin.y > height ? 1 : 0;
+  const direction = vertical < 0 ? (horizontal < 0 ? '↖' : horizontal > 0 ? '↗' : '↑') : vertical > 0 ? (horizontal < 0 ? '↙' : horizontal > 0 ? '↘' : '↓') : horizontal < 0 ? '←' : '→';
+  const label = outside ? `Начало вне поля ${direction}` : 'Начало · 0, 0';
+  const axis = (name, dx, dy, color) => `<line x1="${dx * 12}" y1="${dy * 12}" x2="${dx * 42}" y2="${dy * 42}" stroke="white" stroke-width="7"/><line data-axis="${name.toLowerCase()}" x1="${dx * 12}" y1="${dy * 12}" x2="${dx * 42}" y2="${dy * 42}" stroke="${color}" stroke-width="2.5" marker-end="url(#origin-arrow-${name})"/><text x="${dx * 54}" y="${dy * 54}" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="700" fill="${color}" stroke="white" stroke-width="4" paint-order="stroke">${name}</text>`;
+  const arrows = outside ? '' : axis('X', coordinateFrame.directionX, 0, '#b42318') + axis('Y', 0, -coordinateFrame.directionY, '#087950');
+  const point = outside ? '<path d="M 0 -9 L 9 0 L 0 9 L -9 0 Z" fill="#ffdc80" stroke="#735600" stroke-width="2"/>' : '<circle data-origin-point="true" r="8" fill="white" stroke="#0f172a" stroke-width="2"/><path d="M -12 0 H 12 M 0 -12 V 12" fill="none" stroke="#007da6" stroke-width="2"/><circle r="3" fill="#007da6"/>';
+  return `<svg class="origin-guide" data-outside="${outside}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}. X ${coordinateFrame.directionX === 1 ? 'вправо' : 'влево'}, Y ${coordinateFrame.directionY === 1 ? 'вверх' : 'вниз'}"><defs><marker id="origin-arrow-X" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M 0 0 L 7 3.5 L 0 7 Z" fill="#b42318"/></marker><marker id="origin-arrow-Y" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M 0 0 L 7 3.5 L 0 7 Z" fill="#087950"/></marker></defs><g transform="translate(${x} ${y}) scale(${unit})" font-family="Inter,Arial,sans-serif">${arrows}${point}<g transform="translate(${badgeX} ${badgeY})"><rect width="${badgeWidth}" height="25" rx="6" fill="white" stroke="${outside ? '#a77915' : '#007da6'}" stroke-width="1.5"/><text x="${badgeWidth / 2}" y="16.5" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">${label}</text></g></g></svg>`;
 }
 
 function renderPreview() {
@@ -166,7 +186,7 @@ function renderPreview() {
     const pixelStepX = visibleStep(placementGrid.stepX);
     const pixelStepY = visibleStep(placementGrid.stepY);
     const strokeWidth = .65 * unit;
-    const grid = `<defs><pattern id="preview-grid" width="${pixelStepX}" height="${pixelStepY}" patternUnits="userSpaceOnUse" x="${origin.x}" y="${origin.y}"><path d="M ${pixelStepX} 0 H 0 V ${pixelStepY}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${origin.x}" y1="0" x2="${origin.x}" y2="${dimensions.height}"/><line x1="0" y1="${origin.y}" x2="${dimensions.width}" y2="${origin.y}"/></g><circle cx="${origin.x}" cy="${origin.y}" r="${2.5 * unit}" fill="#1ebcf1"/>`;
+    const grid = `<defs><pattern id="preview-grid" width="${pixelStepX}" height="${pixelStepY}" patternUnits="userSpaceOnUse" x="${origin.x}" y="${origin.y}"><path d="M ${pixelStepX} 0 H 0 V ${pixelStepY}" fill="none" stroke="#e0f1f7" stroke-width="${strokeWidth}"/></pattern></defs><rect width="${dimensions.width}" height="${dimensions.height}" fill="url(#preview-grid)"/><g stroke="#8dcadd" stroke-width="${unit}" stroke-dasharray="${3 * unit} ${4 * unit}"><line x1="${origin.x}" y1="0" x2="${origin.x}" y2="${dimensions.height}"/><line x1="0" y1="${origin.y}" x2="${dimensions.width}" y2="${origin.y}"/></g>`;
     svg = svg.replace(/(<g data-marker-id=)/, grid + '$1');
   }
   const markerLabels = markers.map((marker, index) => {
@@ -180,7 +200,7 @@ function renderPreview() {
   }).join('');
   svg = svg.replace('</svg>', markerLabels + '</svg>');
   // Content is generated exclusively from finite validated numbers and fixed strings.
-  preview.innerHTML = svg;
+  preview.innerHTML = svg + buildOriginGuide(dimensions, origin, unit);
   preview.querySelectorAll('[data-marker-id]').forEach((group, index) => {
     group.dataset.markerIndex = index;
     group.setAttribute('tabindex', '0');
