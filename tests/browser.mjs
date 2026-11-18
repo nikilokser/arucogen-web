@@ -33,6 +33,34 @@ try {
   assert.equal(await page.locator('#marker-rows tr').count(), 4);
   assert.equal(await page.locator('#map-preview [data-marker-id]').count(), 4);
   assert.match(await page.locator('footer').innerText(), /форк/);
+  const paper = page.getByLabel('Формат листа');
+  const pdf = page.getByRole('button', { name: 'Скачать PDF' });
+  assert.equal(await pdf.isEnabled(), true);
+  const lengths = await page.locator('#marker-rows input[data-field="length"]').all();
+  for (const length of lengths) await length.fill('0.277');
+  assert.equal(await pdf.isDisabled(), true);
+  assert.match(await page.locator('#print-fit').innerText(), /277 мм.*A4.*190 мм/);
+  await paper.selectOption('A3');
+  assert.equal(await pdf.isEnabled(), true);
+  assert.match(await page.locator('#print-limit').innerText(), /A3 — 277 мм/);
+  await mkdir('test-results', { recursive: true });
+  async function downloadPrintPdf(format) {
+    const pending = page.waitForEvent('download');
+    await pdf.click();
+    const file = await pending;
+    assert.equal(file.suggestedFilename(), 'aruco-map.pdf');
+    const path = `test-results/map-${format}.pdf`;
+    await file.saveAs(path);
+    const contents = await readFile(path, 'ascii');
+    assert.match(contents, /^%PDF-1\.7/);
+    assert.match(contents, /\/Count 4\b/);
+    assert.match(contents, /ID 4 +\| +4\/4/);
+  }
+  await downloadPrintPdf('A3');
+  for (const length of lengths) await length.fill('0.19');
+  await paper.selectOption('A4');
+  assert.equal(await pdf.isEnabled(), true);
+  await downloadPrintPdf('A4');
   await page.getByRole('button', { name: 'Пример из исходника', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('#marker-rows tr').length === 13);
   assert.equal(await page.locator('#map-preview [data-marker-id]').count(), 13);
@@ -82,7 +110,8 @@ try {
   assert.equal(await page.locator('#dictionary-select option').count(), 22);
   await page.getByLabel('Маркеров по ширине', { exact: true }).fill('3');
   await page.getByLabel('Маркеров по длине', { exact: true }).fill('2');
-  await page.getByLabel('Размер маркера, м', { exact: true }).fill('0.1');
+  await page.getByLabel('Размер маркера, см', { exact: true }).fill('10');
+  assert.equal(await page.locator('#marker-rows input[data-field="length"]').first().inputValue(), '0.1');
   await page.getByLabel('Начальный ID', { exact: true }).fill('90');
   await page.getByLabel('Конечный ID', { exact: true }).fill('99');
   await page.getByLabel('Крайние по ширине, м', { exact: true }).fill('0.8');
@@ -324,7 +353,7 @@ try {
   assert.equal(await touchPage.locator('#marker-rows input[data-field="y"]').first().inputValue(), '0.2');
   await touchPage.close();
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: example, import, editing, 22 dictionaries, live grid, protected TXT drafts, center-spacing modes, persistent dark theme, white exports, physical SVG, PNG/TXT, validation, named downloads, snapped/free pointer drag, zoom, keyboard movement, duplicate IDs, cancellation, mobile touch drag, coordinate frames, custom origin, height editing, framed TXT round trip, visible origin guide, all corners, outside-field indicator, mobile layout.');
+  console.log('Browser checks passed: example, import, editing, 22 dictionaries, live grid, protected TXT drafts, center-spacing modes, persistent dark theme, white exports, physical SVG, A4/A3 PDF, PNG/TXT, validation, named downloads, snapped/free pointer drag, zoom, keyboard movement, duplicate IDs, cancellation, mobile touch drag, coordinate frames, custom origin, height editing, framed TXT round trip, visible origin guide, all corners, outside-field indicator, mobile layout.');
 } finally {
   await browser?.close();
   server?.kill();

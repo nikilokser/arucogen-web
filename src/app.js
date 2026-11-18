@@ -1,3 +1,4 @@
+import { generatePrintPdf, printFitError, printMarkerLimit, PRINT_MARGIN_MM } from './print-pdf.js';
 import { DEFAULT_SETTINGS, DEFAULT_DICTIONARY, DICTIONARY_NAMES, FIELDS, MAX_MARKERS, parseMap, serializeMap, validateMap, validateSettings, generateSvg, markerBox, mapWarnings, getDictionary, dictionaryFromText, renderDimensions } from './core.js';
 import { generateGrid } from './grid.js';
 import { exportFilename, moveOnGrid } from './interaction.js';
@@ -43,6 +44,8 @@ const dictionarySelect = $('#dictionary-select');
 const gridFields = { columns: $('#grid-columns'), rows: $('#grid-rows'), length: $('#grid-length'), idStart: $('#grid-id-start'), idEnd: $('#grid-id-end'), spanX: $('#grid-span-x'), spanY: $('#grid-span-y'), stepX: $('#grid-step-x'), stepY: $('#grid-step-y') };
 let gridMode = 'span';
 let previousDictionary = DEFAULT_DICTIONARY;
+const printFormat = $('#print-format');
+const pdfButton = $('#export-pdf');
 const exportButtons = [$('#export-svg'), $('#export-png'), $('#export-txt')];
 const labels = { id: 'ID', length: 'Размер', x: 'X', y: 'Y', z: 'Z' };
 const formatMeters = value => Number(value.toPrecision(6)).toLocaleString('ru-RU');
@@ -210,7 +213,22 @@ function renderPreview() {
   });
 }
 
+function refreshPrintExport() {
+  const format = printFormat.value;
+  const error = printFitError(markers, format);
+  $('#print-limit').textContent = `Максимальная сторона метки на ${format} — ${printMarkerLimit(format)} мм. С полями ${PRINT_MARGIN_MM} мм: A4 — ${printMarkerLimit('A4')} мм, A3 — ${printMarkerLimit('A3')} мм.`;
+  $('#print-fit').textContent = error;
+  $('#print-fit').hidden = !error;
+  pdfButton.disabled = Boolean(error) || sourceDirty;
+  if (!pdfButton.disabled) {
+    try { validateMap(markers, dictionarySelect.value); }
+    catch { pdfButton.disabled = true; }
+  }
+}
+printFormat.addEventListener('change', refreshPrintExport);
+
 function update() {
+  refreshPrintExport();
   const maxId = getDictionary(dictionarySelect.value).count - 1;
   for (const row of $('#marker-rows').rows) {
     for (const input of row.querySelectorAll('input')) {
@@ -385,7 +403,7 @@ dictionarySelect.addEventListener('change', () => {
 });
 
 function readGrid() {
-  return { ...Object.fromEntries(Object.entries(gridFields).map(([key, input]) => [key, input.valueAsNumber])), mode: gridMode };
+  return { ...Object.fromEntries(Object.entries(gridFields).map(([key, input]) => [key, input.valueAsNumber])), length: gridFields.length.valueAsNumber / 100, mode: gridMode };
 }
 function currentGrid() {
   const current = readSettings();
@@ -513,7 +531,7 @@ $('#height-form').addEventListener('submit', event => {
   $('#height-dialog').close();
 });
 function refreshFilename() {
-  $('#filename-hint').textContent = `Файлы: ${['svg', 'png', 'txt'].map(extension => exportFilename(mapName.value, extension)).join(' / ')}`;
+  $('#filename-hint').textContent = `Файлы: ${['svg', 'png', 'txt', 'pdf'].map(extension => exportFilename(mapName.value, extension)).join(' / ')}`;
 }
 mapName.addEventListener('input', refreshFilename);
 
@@ -625,6 +643,15 @@ function download(blob, filename) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+pdfButton.addEventListener('click', () => {
+  try {
+    if (sourceDirty) throw new Error('Примените изменения TXT перед скачиванием PDF.');
+    const pdf = generatePrintPdf(markers, printFormat.value, dictionarySelect.value);
+    download(new Blob([pdf], { type: 'application/pdf' }), exportFilename(mapName.value, 'pdf'));
+    notify('PDF скачан. Печатайте в масштабе 100%.');
+  } catch (error) { notify(error.message); }
+});
 
 $('#export-svg').addEventListener('click', () => {
   try {

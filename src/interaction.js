@@ -1,7 +1,7 @@
 import { DEFAULT_FRAME } from './coordinates.js';
 
 export function exportFilename(name, extension) {
-  let base = name.trim().replace(/\.(svg|png|txt)$/i, '').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, '-').replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 100);
+  let base = name.trim().replace(/\.(svg|png|txt|pdf)$/i, '').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, '-').replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 100);
   if (!base) base = 'aruco-map';
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(base)) base = `map-${base}`;
   return `${base}.${extension}`;

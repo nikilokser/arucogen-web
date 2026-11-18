@@ -41,7 +41,7 @@
           <div class="panel-heading"><h2 id="settings-heading">Словарь и поле для печати</h2></div>
           <div class="settings-fields">
             <label class="full-field">Имя карты<input id="map-name" type="text" value="aruco-map" maxlength="100" autocomplete="off" aria-describedby="filename-hint"></label>
-            <p id="filename-hint" class="field-hint full-field">Файлы: aruco-map.svg / .png / .txt</p>
+            <p id="filename-hint" class="field-hint full-field">Файлы: aruco-map.svg / .png / .txt / .pdf</p>
             <label class="full-field">Словарь меток<select id="dictionary-select"></select></label>
             <p id="dictionary-info" class="field-hint full-field"></p>
             <label>Ширина поля, м<input id="print-width" type="number" min="0.001" step="any" value="2" inputmode="decimal"></label>
@@ -72,7 +72,7 @@
           <div class="settings-fields">
             <label>Маркеров по ширине<input id="grid-columns" type="number" min="1" max="1000" step="1" value="2" inputmode="numeric"></label>
             <label>Маркеров по длине<input id="grid-rows" type="number" min="1" max="1000" step="1" value="2" inputmode="numeric"></label>
-            <label class="full-field">Размер маркера, м<input id="grid-length" type="number" min="0.000001" step="any" value="0.185" inputmode="decimal"></label>
+            <label class="full-field">Размер маркера, см<input id="grid-length" type="number" min="0.0001" step="any" value="18.5" inputmode="decimal"></label>
             <label>Начальный ID<input id="grid-id-start" type="number" min="0" step="1" value="1" inputmode="numeric"></label>
             <label>Конечный ID<input id="grid-id-end" type="number" min="0" step="1" value="49" inputmode="numeric"></label>
           </div>
@@ -143,6 +143,16 @@
         <div id="map-measurements" class="map-measurements"></div>
         <div id="warnings" class="warnings" aria-live="polite" hidden></div>
         <div class="export-area"><div class="export-heading"><h2>Скачать карту</h2><p>Чистый файл, без сетки и подписей</p></div><div class="export-buttons"><button id="export-svg" class="primary-button" type="button" aria-label="Скачать SVG">SVG <span class="button-detail">Вектор</span> <span aria-hidden="true">↓</span></button><button id="export-png" class="secondary-button" type="button" aria-label="Скачать PNG">PNG <span class="button-detail">Изображение</span> <span aria-hidden="true">↓</span></button><button id="export-txt" class="secondary-button" type="button" aria-label="Скачать TXT">TXT <span class="button-detail">Координаты</span> <span aria-hidden="true">↓</span></button></div></div>
+        <div class="export-area print-export">
+          <div class="export-heading"><h2>PDF для печати</h2></div>
+          <div class="print-controls">
+            <label>Формат листа <select id="print-format"><option value="A4">A4</option><option value="A3">A3</option></select></label>
+            <button id="export-pdf" class="primary-button" type="button" aria-describedby="print-limit print-fit">Скачать PDF <span aria-hidden="true">↓</span></button>
+          </div>
+          <p id="print-limit" class="field-hint">Максимальная сторона метки с полями 10 мм: A4 — 190 мм, A3 — 277 мм.</p>
+          <p class="field-hint">Одна метка на листе. В настройках принтера выберите размер бумаги и масштаб «Фактический размер» (100%).</p>
+          <p id="print-fit" class="error-message" role="status" hidden></p>
+        </div>
       </section>
     </div>
     <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
